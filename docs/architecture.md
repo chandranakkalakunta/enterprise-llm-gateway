@@ -43,13 +43,13 @@ Nine core components make up the control and data planes:
 | 2 | **Policy Engine** | Purpose → route maps, role checks, Super-user allowlists, budgets, feature flags. OPA + versioned config; fail-closed for egress. See §4. |
 | 3 | **DLP / Input Guardrail Service** | Detect secrets, PII, regulated patterns, custom IP markers; redact or block before external call. Profile-driven. See §5. |
 | 4 | **Semantic Cache** | Embedding + similarity lookup; store eligible request/response pairs under ACL / purpose scope. Bypass on failure. |
-| 5 | **Routing Engine** | Select primary + fallback destinations; provider adapters; health / rate-limit awareness. Public, internal LLM, and RAG as uniform “routes”. |
+| 5 | **Routing Engine** | Ordered models per purpose; short capped retries; circuit breakers; quotas. See §6. |
 | 6 | **Conversation Memory** | Multi-turn context per user and conversation; hybrid hot/durable storage; attachment handling; summarisation. See §3. |
 | 7 | **Metering & Analytics** | Tokens, cost estimates, purpose, route, latency, cache outcomes; optional 1–5 star feedback as quality signals. Privacy-respecting defaults. |
 | 8 | **Audit Log** | Immutable-style record of decisions, overrides, blocks, admin changes. SIEM export. |
 | 9 | **Admin API / Console** | CRUD for purposes, maps, roles, DLP rules, cache and memory policy. SSO-protected. |
 
-**Supporting (not counted above):** Provider Adapters (normalise vendor quirks) and Config & Secrets (policy versions, provider keys, RAG endpoints via customer secret manager).
+**Supporting (not counted above):** **Provider Adapters** (common interface; normalise vendor quirks — see §7) and Config & Secrets (policy versions, provider keys, RAG endpoints via customer secret manager).
 
 ```text
 Clients (IDE / Chat / Apps / Agents / Batch)
@@ -340,16 +340,197 @@ See **[ADR-003: Input Guardrails / DLP](adr/003-input-guardrails-dlp.md)** for t
 
 ---
 
-## 6. Next architecture sections (planned)
+## 6. Routing Engine
+
+> These decisions are **locked** for the initial architecture. Changes require a new ADR that supersedes [ADR-004](adr/004-routing-and-adapters.md).
+
+### 6.1 Responsibility
+
+The Routing Engine turns a policy-allowed request into a concrete **destination attempt sequence**, then drives execution through Provider Adapters until success or exhaustion. It owns:
+
+- Building the **ordered candidate list** of models for the resolved purpose
+- **Short, capped retries** on the current model, then advance to the next
+- **Circuit breaking** for persistently unhealthy models / providers
+- **Rate limits and quotas** enforcement (per user, per agent, per purpose) before and during attempts
+- Fallback to **`General`** purpose models when the purpose list is empty or fully exhausted
+- Emitting routing outcome metadata for metering, audit, and the client (which model answered)
+
+It does **not** invent policy (OPA does), scan content (DLP does), or speak vendor wire protocols (adapters do).
+
+### 6.2 Key locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| Preference model | Admin-defined **ordered list of models per purpose** |
+| Exhausted / no match | Fall back to models bound to **`General`** |
+| Retries | Short **capped exponential** backoff on current model, then next (e.g. ~200 ms → 500 ms → 1 s; total extra delay budget ~**1.5–2 s**) |
+| Health | **Circuit breaking** for persistently unhealthy models |
+| Attribution | Every response must show **model + sub-model** that generated it |
+| Agents | First-class **high-risk** consumers — stronger rate limits and controls |
+| Abuse controls | Admin quotas/limits per **user**, **agent**, and **purpose**; throttle or hard-block abuse |
+| Discovery | Periodic background sync + manual refresh for Super AI Users (feeds the catalogue routing uses) |
+
+### 6.3 Selection, retry, and fallback flow
+
+```text
+Policy allow + purpose + principal + optional Super-user override
+        │
+        ▼
+┌────────────────────────────┐
+│ Enforce rate limits /      │──over limit──► Throttle or hard-block
+│ quotas (user|agent|purpose)│                (no provider call)
+└─────────────┬──────────────┘
+              ▼
+┌────────────────────────────┐
+│ Build ordered candidates   │  purpose model list
+│ (skip open circuits)       │  → else General list
+└─────────────┬──────────────┘
+              ▼
+        For each candidate model:
+              │
+              ▼
+┌────────────────────────────┐
+│ Adapter.invoke (stream)    │
+│ transient fail?            │
+└─────────────┬──────────────┘
+              │
+     retry with short backoff     success
+     (capped; ~1.5–2s budget) ──────────► Stream + attribute model
+              │                              + sub-model; close circuit soft
+              ▼
+     retries exhausted → next candidate
+              │
+              ▼
+     all candidates failed ──► Gateway error; open/record circuits
+```
+
+**Super AI User overrides:** if Policy allows an override, that model is tried **first** (or exclusively if policy says so), still subject to circuit state, quotas, and DLP. Out-of-allowlist overrides never reach the Routing Engine.
+
+**Latency posture:** prefer failing over to the next healthy model over waiting many seconds on a dead one. The ~1.5–2 s extra delay budget is a **ceiling for retries on a single model**, not permission to stack long waits across the whole list without product review.
+
+### 6.4 Circuit breaking
+
+- Track success/failure (and optionally latency) **per model** (and optionally per provider endpoint).
+- **Open** circuit after sustained failure → skip that model in candidate building.
+- **Half-open** probe after cooldown; success closes circuit, failure re-opens.
+- Circuit state is shared across data-plane replicas (or consistently sharded) so one replica does not keep hammering a bad model.
+- Circuit open is **not** a substitute for admin removing a model from the ordered list; it is runtime protection.
+
+### 6.5 Rate limiting, quotas, and Agents
+
+| Principal | Controls |
+|-----------|----------|
+| **Normal AI User** | Per-user and per-purpose rate limits / token quotas as configured by admin |
+| **Super AI User** | Same base controls; overrides do not bypass quota unless admin explicitly grants a higher envelope |
+| **Agents / service accounts** | **Stricter defaults**: lower burst, lower sustained RPS, tighter token budgets; treat as high-risk automation |
+
+Admins can:
+
+- Set limits **per user**, **per agent**, and **per purpose**
+- **Throttle** (slow / 429 with retry-after) or **hard-block** abusive behaviour
+- Observe limit hits in metering without logging raw prompts by default
+
+Agents are **first-class** Gateway consumers (F17) but must not be able to starve interactive human traffic or silently rack up cost.
+
+### 6.6 Relationship to Policy and DLP
+
+| Upstream | Routing uses it for |
+|----------|---------------------|
+| Purpose (+ provenance) | Which ordered model list to load; `General` fallback |
+| Allow / deny + egress | Whether external models may appear at all |
+| Super-user allowlist decision | Optional override candidate |
+| Post-DLP text | Payload passed to adapters (never pre-DLP secrets that were redacted) |
+
+Order on the path: **Policy → DLP → (optional Semantic Cache) → Routing → Adapter**.
+
+See **[ADR-004: Routing and Adapters](adr/004-routing-and-adapters.md)** for the decision record (shared with §7).
+
+---
+
+## 7. Provider Adapters / LLM Integration Layer
+
+> Locked with the Routing Engine under [ADR-004](adr/004-routing-and-adapters.md).
+
+### 7.1 Responsibility
+
+Provider Adapters are the **only** components that speak vendor- or system-specific APIs. Each adapter:
+
+- Formats requests for its destination (public LLM, internal LLM, or internal RAG)
+- Handles **streaming** (true proxy stream; no full-response buffering on the happy path)
+- Accepts **conversation history** (and summaries) already assembled by Conversation Memory under isolation keys
+- Normalises **errors**, **token usage**, and **timings** into a uniform metadata shape
+- Returns enough identity for **mandatory model + sub-model attribution**
+
+The Routing Engine and metering layer depend on adapters looking the same from the outside.
+
+### 7.2 Common adapter interface (goals)
+
+All adapters implement one conceptual contract (language-specific shape TBD in implementation):
+
+| Capability | Requirement |
+|------------|-------------|
+| `invoke` / `stream` | Start a completion (or RAG answer) and stream tokens/events |
+| History handoff | Accept ordered turns + optional summary blob from Conversation Memory |
+| Cancellation | Propagate client disconnect / deadline |
+| Health | Support lightweight health or rely on call outcomes for circuit inputs |
+| Metadata | Always return `provider`, `model`, `sub_model` (variant), `request_id`, token counts if available, latency marks |
+| Errors | Map to gateway error classes: `transient`, `rate_limited`, `auth`, `invalid_request`, `content_filtered`, `fatal` |
+
+**Why a common interface:** consistent logging, metering, analytics, retries, and circuit decisions — without `if provider == "x"` scattered through the data plane.
+
+### 7.3 Conversation history
+
+- History is loaded and scoped by Conversation Memory (`user_id` + `conversation_id`) **before** the adapter call.
+- Adapters receive a **normalised turn list** (and optional summary of older turns), not raw Redis keys.
+- Provider-specific packing (e.g. system vs user roles, max turns, multimodal parts later) stays **inside** the adapter.
+- Post-DLP redactions in the latest user turn must be what the provider sees.
+
+### 7.4 Model discovery
+
+| Mode | Who / when | Behaviour |
+|------|------------|-----------|
+| **Periodic background sync** | Platform job; **admin-configurable interval** | Refresh available models/variants from registered providers into the catalogue used by Admin Console and routing eligibility |
+| **Manual refresh** | **Super AI Users** (and admins) | On-demand catalogue refresh for that provider or global scope; **audited**; rate-limited so refresh cannot become a DoS |
+
+Discovery updates the **catalogue** of what *can* be bound into purpose ordered lists. It does not by itself change live policy bindings without admin publish — except where product allows auto-bind of new sub-variants under an existing parent (explicit policy; default is admin-controlled).
+
+### 7.5 Mandatory model attribution
+
+Every successful response (UI and API) must clearly indicate generation source, e.g.:
+
+> Response generated by: **Claude 4 Sonnet** (`claude-sonnet-4-…`) via Enterprise LLM Gateway
+
+Requirements:
+
+- **Parent / product name** + **sub-model / variant id** as known from the adapter
+- Present on streaming completion (final event and/or response headers/metadata) so clients can always display it
+- Same fields land in metering for purpose × model quality analysis (including 1–5 star feedback joins)
+
+### 7.6 Destination types under one abstraction
+
+| `destination.type` | Adapter focus |
+|--------------------|---------------|
+| `public_llm` | Commercial APIs; controlled egress; streaming chat/completions |
+| `internal_llm` | In-VPC / customer-hosted OpenAI-compatible or native endpoints |
+| `internal_rag` | Retrieve-and-answer; pass through citations when present |
+
+Routing treats them as ordered candidates the same way; adapters hide protocol differences.
+
+See **[ADR-004: Routing Engine and Provider Adapters](adr/004-routing-and-adapters.md)** for the decision record.
+
+---
+
+## 8. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
 - [x] Conversation Memory (see §3, ADR-001)
 - [x] Policy Engine (see §4, ADR-002)
 - [x] Input Guardrails / DLP (see §5, ADR-003)
+- [x] Routing Engine (see §6, ADR-004)
+- [x] Provider Adapters (see §7, ADR-004)
 - [ ] Request path sequence (happy path + failure modes)
 - [ ] Semantic cache scoping and invalidation
-- [ ] Provider adapter contract and streaming model
 - [ ] Identity, roles (Normal vs Super AI User), and service accounts (detail beyond §4.4)
 - [ ] Data model (entities, retention, redaction)
 - [ ] Observability (metrics, logs, traces) and SLOs
@@ -369,3 +550,4 @@ Sections to be added as design deepens:
 | [ADR-001](adr/001-conversation-memory-storage.md) | Locked memory storage decision |
 | [ADR-002](adr/002-policy-engine.md) | Locked Policy Engine (OPA) decision |
 | [ADR-003](adr/003-input-guardrails-dlp.md) | Locked Input Guardrails / DLP decision |
+| [ADR-004](adr/004-routing-and-adapters.md) | Locked Routing Engine + Provider Adapters decision |
