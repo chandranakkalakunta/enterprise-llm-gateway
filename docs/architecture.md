@@ -4,6 +4,7 @@
 > **Last updated:** 2026-07-25  
 > **Scope:** This document is the living architecture reference for the dedicated Enterprise LLM Gateway repository. Sections will grow component by component.
 
+
 ---
 
 ## 1. System Context & Trust Boundaries
@@ -40,7 +41,7 @@ Nine core components make up the control and data planes:
 |---|-----------|----------------|
 | 1 | **API Gateway / Proxy (data plane)** | Accept client requests (OpenAI-compatible and/or native), authn, stream proxying. Must stay thin on the hot path. |
 | 2 | **Policy Engine** | Purpose → route maps, role checks, Super-user allowlists, budgets, feature flags. OPA + versioned config; fail-closed for egress. See §4. |
-| 3 | **DLP / Input Guardrail Service** | Detect secrets, PII, regulated patterns, custom IP markers; block / redact / allow before external call. |
+| 3 | **DLP / Input Guardrail Service** | Detect secrets, PII, regulated patterns, custom IP markers; redact or block before external call. Profile-driven. See §5. |
 | 4 | **Semantic Cache** | Embedding + similarity lookup; store eligible request/response pairs under ACL / purpose scope. Bypass on failure. |
 | 5 | **Routing Engine** | Select primary + fallback destinations; provider adapters; health / rate-limit awareness. Public, internal LLM, and RAG as uniform “routes”. |
 | 6 | **Conversation Memory** | Multi-turn context per user and conversation; hybrid hot/durable storage; attachment handling; summarisation. See §3. |
@@ -208,14 +209,145 @@ See **[ADR-002: Policy Engine (OPA)](adr/002-policy-engine.md)** for the decisio
 
 ---
 
-## 5. Next architecture sections (planned)
+## 5. Input Guardrails / DLP
+
+> These decisions are **locked** for the initial architecture. Changes require a new ADR that supersedes [ADR-003](adr/003-input-guardrails-dlp.md).
+
+### 5.1 Responsibility
+
+The Input Guardrails / DLP service inspects **user-supplied text** before a request is allowed to leave the trust boundary (and, under profile policy, before some internal routes as well). It:
+
+- Detects secrets, PII, regulated patterns, and **custom corporate markers**
+- Applies an action: **allow**, **redact**, or **hard block**
+- Returns a scan result (hits, redacted text, action, rule ids) to the data plane for routing and audit
+- Does **not** decide purpose or destination — that remains the Policy Engine’s job
+
+Detection runs **entirely inside the trust boundary**. It must never call a public LLM to “check” whether content is sensitive.
+
+### 5.2 Key locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| v1 detection | **Regex + pattern libraries + basic ML/NER classifiers** |
+| Public LLM for DLP | **Not allowed** |
+| Default action | **Redact** matched spans and **continue** |
+| High-sensitivity | **Hard Block** when the active profile requires it (e.g. active patents, internal-only document markers) |
+| Custom patterns | First-class; **admin-manageable** (data-driven) |
+| v1 scope | **Text prompts only**; file/image scanning deferred (critical follow-on) |
+| Evaluation failure | **Fail-closed** for external destinations → **Block** egress |
+| Configuration | Rules, patterns, and **profiles** are data-driven; no code deploy to add a pattern |
+| Policy input | Receives **`dlp_profile`** (or equivalent) from the Policy Engine |
+
+### 5.3 High-level processing flow
+
+```text
+Policy Engine allow + route set + dlp_profile
+        │
+        ▼
+┌───────────────────────────┐
+│ Load profile snapshot     │  patterns, NER toggles,
+│ (versioned, data-driven)  │  category → action map
+└─────────────┬─────────────┘
+              ▼
+┌───────────────────────────┐
+│ Scan text prompt          │  Regex / pattern packs
+│ (v1: text only)           │  + basic ML/NER
+└─────────────┬─────────────┘
+              │
+     no hits / below threshold
+              │──────────────► Allow (unmodified)
+              │
+     hits found
+              ▼
+┌───────────────────────────┐
+│ Resolve action per hit    │  profile category policy
+│ and overall request       │  redact vs block
+└─────────────┬─────────────┘
+              │
+     any Block category?          Redact-only hits
+              │                        │
+              ▼                        ▼
+         Hard Block              Apply redactions
+         (no external call)      (placeholders)
+              │                        │
+              │                        ▼
+              │               Continue to cache / route
+              │               with redacted text
+              ▼
+         User-facing denial
+         (no sensitive detail leaked)
+              │
+              ▼
+    Emit scan id, profile version, hit categories,
+    action → Audit / Metering (metadata, not raw secrets)
+```
+
+**Latency posture:** keep scans synchronous but bounded (compiled regex, local NER, no remote DLP-as-a-service on the hot path unless it is in-VPC and SLO-bound). Prefer streaming-friendly design: scan the assembled user turn before first external byte is sent.
+
+### 5.4 Relationship with the Policy Engine
+
+| From Policy Engine | Used by DLP for |
+|--------------------|-----------------|
+| **`dlp_profile`** | Which pattern packs, NER features, and category→action map apply |
+| Egress intent / destination type | Fail-closed path: errors on **external** routes → Block |
+| Purpose / principal (optional attributes) | Audit correlation; optional profile variants by purpose |
+
+Flow order on the request path:
+
+1. Authn → purpose resolution → **OPA policy** (allow/deny, route set, **`dlp_profile`**)
+2. **DLP scan** under that profile
+3. Semantic cache / route with **redacted** (or original) text only if DLP allows continuation
+
+DLP does not re-run OPA. If redaction changes the text, downstream components (cache keys, provider payload) use the **post-DLP** text. Cache scoping must account for profile and policy version so redacted and unredacted variants do not cross-contaminate.
+
+### 5.5 Redact vs Block
+
+| Mode | Behaviour | Typical use |
+|------|-----------|-------------|
+| **Redact (default)** | Replace spans with stable placeholders (e.g. `[REDACTED:API_KEY]`); request continues | API keys, emails, phone numbers, common secrets developers paste by mistake |
+| **Hard Block** | Stop the request; no external provider call; clear user message without echoing the secret | Active patents, explicit internal-only document markers, categories the profile marks as non-negotiable |
+| **Allow** | No qualifying hits | Clean text |
+
+Principles:
+
+- Prefer **redact-and-continue** so the product still feels like native chat for recoverable mistakes.
+- **Block** remains mandatory for high-sensitivity profiles/categories — security is not only soft redaction.
+- Failures (timeout, scanner crash, missing profile) on a path that would call a **public** destination → **Block** (fail-closed), consistent with ADR-002 egress posture.
+
+### 5.6 Custom patterns
+
+Admins manage corporate-specific detectors without code changes:
+
+- Pattern definitions (regex / dictionary / structured detectors) and metadata (category, default action, severity)
+- Packs and **profiles** that bind categories to redact vs block
+- Versioned publish (draft → validate → publish), same operational spirit as policy snapshots
+- Examples: product codenames, active patent identifiers, internal project keys, regulated account formats unique to the enterprise
+
+Built-in libraries cover common secrets and PII; **custom packs are first-class**, not a bolt-on afterthought.
+
+### 5.7 v1 scope and future file / image scanning
+
+| Scope | v1 | Later |
+|-------|----|--------|
+| Chat / API **text** prompts | In scope | — |
+| File uploads (PDF, Office, source archives) | Deferred | Extract text / structured scan under same profiles |
+| Images / screenshots | Deferred | OCR + optional vision classifiers **in-boundary only** |
+| Multimodal provider payloads | Text parts only | Full attachment pipeline |
+
+File and image scanning is **acknowledged as critical** for real enterprise adoption (users will attach decks and screenshots). It is phased so the text action model, profiles, and admin APIs ship first without claiming multimodal coverage prematurely.
+
+See **[ADR-003: Input Guardrails / DLP](adr/003-input-guardrails-dlp.md)** for the decision record.
+
+---
+
+## 6. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
 - [x] Conversation Memory (see §3, ADR-001)
 - [x] Policy Engine (see §4, ADR-002)
+- [x] Input Guardrails / DLP (see §5, ADR-003)
 - [ ] Request path sequence (happy path + failure modes)
-- [ ] DLP / guardrail pipeline
 - [ ] Semantic cache scoping and invalidation
 - [ ] Provider adapter contract and streaming model
 - [ ] Identity, roles (Normal vs Super AI User), and service accounts (detail beyond §4.4)
@@ -236,3 +368,4 @@ Sections to be added as design deepens:
 | [Open questions](open-questions.md) | Unresolved product / tech risks |
 | [ADR-001](adr/001-conversation-memory-storage.md) | Locked memory storage decision |
 | [ADR-002](adr/002-policy-engine.md) | Locked Policy Engine (OPA) decision |
+| [ADR-003](adr/003-input-guardrails-dlp.md) | Locked Input Guardrails / DLP decision |

@@ -34,6 +34,7 @@ This repository has moved out of general **ideation** into a **dedicated archite
 
 - **Conversation Memory** — Redis (hot) + Managed PostgreSQL (durable) + object storage for attachments. See [ADR-001](docs/adr/001-conversation-memory-storage.md).
 - **Policy Engine** — Open Policy Agent (OPA); optional purpose with small/fast LLM auto-classification; admin-managed purposes with mandatory `General` fallback; fail-closed external egress. See [ADR-002](docs/adr/002-policy-engine.md).
+- **Input Guardrails / DLP** — Regex + ML/NER (no public LLM for DLP); default redact, hard block for high-sensitivity; admin custom patterns; text-only in v1. See [ADR-003](docs/adr/003-input-guardrails-dlp.md).
 
 Living architecture: [docs/architecture.md](docs/architecture.md).
 
@@ -44,7 +45,7 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
 | [docs/overview.md](docs/overview.md) | Problem statement, vision, KPIs |
 | [docs/requirements.md](docs/requirements.md) | Functional & non-functional requirements |
 | [docs/use-cases.md](docs/use-cases.md) | Personas and scenarios |
-| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked memory & policy decisions) |
+| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked memory, policy & DLP decisions) |
 | [docs/open-questions.md](docs/open-questions.md) | Open product / technical questions |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 | [design/](design/) | Working design notes and diagrams (as they land) |
@@ -64,7 +65,8 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
     ├── assets/             # Diagrams and images
     └── adr/
         ├── 001-conversation-memory-storage.md
-        └── 002-policy-engine.md
+        ├── 002-policy-engine.md
+        └── 003-input-guardrails-dlp.md
 ```
 
 ## One-sentence summary
