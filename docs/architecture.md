@@ -1,7 +1,7 @@
 # Enterprise LLM Gateway — Architecture
 
 > **Status:** Architecture phase  
-> **Last updated:** 2026-07-25  
+> **Last updated:** 2026-07-26  
 > **Scope:** This document is the living architecture reference for the dedicated Enterprise LLM Gateway repository. Sections will grow component by component.
 
 
@@ -42,7 +42,7 @@ Nine core components make up the control and data planes:
 | 1 | **API Gateway / Proxy (data plane)** | Accept client requests (OpenAI-compatible and/or native), authn, stream proxying. Must stay thin on the hot path. |
 | 2 | **Policy Engine** | Purpose → route maps, role checks, Super-user allowlists, budgets, feature flags. OPA + versioned config; fail-closed for egress. See §4. |
 | 3 | **DLP / Input Guardrail Service** | Detect secrets, PII, regulated patterns, custom IP markers; redact or block before external call. Profile-driven. See §5. |
-| 4 | **Semantic Cache** | Embedding + similarity lookup; store eligible request/response pairs under ACL / purpose scope. Bypass on failure. |
+| 4 | **Semantic Cache** | Dedicated Vector DB + in-boundary embeddings; per-prompt cosine cache for DLP-clean content. See §8. |
 | 5 | **Routing Engine** | Ordered models per purpose; short capped retries; circuit breakers; quotas. See §6. |
 | 6 | **Conversation Memory** | Multi-turn context per user and conversation; hybrid hot/durable storage; attachment handling; summarisation. See §3. |
 | 7 | **Metering & Analytics** | Tokens, cost estimates, purpose, route, latency, cache outcomes; optional 1–5 star feedback as quality signals. Privacy-respecting defaults. |
@@ -520,7 +520,144 @@ See **[ADR-004: Routing Engine and Provider Adapters](adr/004-routing-and-adapte
 
 ---
 
-## 8. Next architecture sections (planned)
+## 8. Semantic Cache
+
+> These decisions are **locked** for the initial architecture. Changes require a new ADR that supersedes [ADR-005](adr/005-semantic-cache.md).
+
+### 8.1 Responsibility
+
+The Semantic Cache reduces cost, latency, and provider load for **repeated or near-duplicate** prompts by storing and retrieving prior answers when policy and DLP say it is safe.
+
+It owns:
+
+- In-boundary **embedding** of eligible prompts
+- **Similarity search** in a dedicated Vector DB
+- **Scoped** store of prompt → response pairs (plus metadata for attribution and invalidation)
+- **TTL, manual, and source-document** invalidation; size-based eviction
+
+It does **not** bypass Policy or DLP, own multi-turn conversation history (Conversation Memory does), or call public models for embedding.
+
+**Placement on the path:** Policy → DLP → **Semantic Cache (lookup)** → on miss, Routing → Adapter → **async cache write** (if eligible). Cache service failure must **not** block the gateway: bypass cache and continue to origin (fail-open for the cache hop only).
+
+### 8.2 Key locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| Vector store | **Dedicated Vector Database** (mandatory) |
+| Embedding model | **Local / private open model** inside the trust boundary; **bge** or **nomic** family preferred |
+| Similarity metric | **Cosine similarity** |
+| Threshold | Configurable; start ~**0.88–0.90**; **tunable per purpose** |
+| Sharing | Only **non-sensitive / DLP-clean** content; **never** cache private or redacted data |
+| Caching unit (v1) | **Per-prompt**: normalized prompt + purpose + sensitivity — **not** full multi-turn threads |
+| Isolation / scoping | At least **purpose + sensitivity level** (optionally department) |
+| Invalidation | Configurable **TTL** + **manual admin** + **source-document** changes (RAG-related entries) |
+| Eviction | **Size-based** (max entries or max storage), **LRU** or equivalent |
+| Hit-rate goal | Measurable optimization; directional target **8%+** enterprise hit rate |
+| Governance | Respect **Policy + DLP** before any write and before any hit is served externally |
+
+### 8.3 High-level flow (embed → search → hit/miss)
+
+```text
+Policy allow + purpose + cache_enabled?
+        │
+        ▼
+DLP scan (profile-driven)
+        │
+        ├── Block ──────────────────────────► Stop (no cache, no route)
+        │
+        ├── Sensitive / redacted / not clean ► Skip cache; route to provider
+        │
+        └── DLP-clean + policy allows cache
+                    │
+                    ▼
+        Normalize prompt (whitespace, trivial noise)
+                    │
+                    ▼
+        Embed with in-boundary model (bge/nomic-class)
+                    │
+                    ▼
+        Cosine ANN search in Vector DB
+        filter: purpose + sensitivity (+ optional dept)
+        score ≥ purpose threshold (~0.88–0.90 default band)
+                    │
+           hit                    miss
+            │                      │
+            ▼                      ▼
+   Serve cached answer      Routing → Adapter
+   + cache-hit flag         stream response
+   + stored model attr             │
+   (still show source)             ▼
+                           Async write if still eligible:
+                           embedding, response, model meta,
+                           purpose, sensitivity, policy version,
+                           optional source-doc refs (RAG)
+```
+
+**Latency posture:** embedding + ANN is the only cache work that blocks serving on the read path. Writes are **async** after the response is safely completed. Prefer local embedding replicas co-located with the data plane.
+
+### 8.4 Storage and embedding model
+
+| Layer | Choice | Notes |
+|-------|--------|-------|
+| Vector index | **Dedicated Vector DB** | ANN at scale; separate from Conversation Memory Redis/Postgres |
+| Payload / metadata | Alongside vectors (DB fields or side store) | Response body ref, model attribution, purpose, sensitivity, TTL, source-doc ids |
+| Embeddings | **Private open model** (bge / nomic preferred) | Hosted **inside** the trust boundary; no public embedding API for cache |
+| Metric | **Cosine** | Consistent with normalized embedding practice |
+
+Exact product SKUs (e.g. which managed vector service) are implementation choices; **dedicated** vector storage and **in-boundary** embeddings are not optional.
+
+### 8.5 Isolation and sharing rules
+
+| Rule | Detail |
+|------|--------|
+| Scope keys | Minimum: **`purpose` + `sensitivity_level`**; optional **`department`** (or cost centre) when policy requires |
+| Shared entries | Only when content is **DLP-clean** and marked **non-sensitive** for sharing |
+| Never write | Private user content, **redacted** prompts/responses, Block outcomes, purposes with `cache_enabled = false` |
+| Never serve | Hits that fail a re-check against current policy version / profile if admin requires strict revalidation |
+| Cross-purpose | **No** — purpose is part of the isolation key |
+| Conversation Memory | Separate system; cache is **not** a substitute for per-user threads |
+
+### 8.6 Per-prompt vs multi-turn (v1 rationale)
+
+| Approach | v1 stance | Why |
+|----------|-----------|-----|
+| **Per-prompt** (normalized text + purpose + sensitivity) | **Primary** | High reuse for FAQs, agent re-asks, near-duplicates; smaller leak surface |
+| **Full multi-turn thread** as cache unit | **Not v1** | Threads diverge quickly; large personal context; low hit quality vs risk |
+
+Conversation Memory still supplies multi-turn context to the model on a **cache miss**. A cache **hit** short-circuits provider call for that prompt when similarity and policy match; it does not replace thread storage.
+
+### 8.7 Invalidation and eviction
+
+| Mechanism | Behaviour |
+|-----------|-----------|
+| **TTL** | Configurable per purpose (or global default); expired entries are not served |
+| **Manual admin invalidation** | Purge by purpose, pattern, entry id, or global; audited |
+| **Source-document invalidation** | For RAG-related cache entries, invalidate when registered source documents change (id / version / hash from RAG pipeline hooks) |
+| **Size-based eviction** | Max entries or max storage; **LRU** (or equivalent) when over capacity |
+| **Policy version** | Optional hard invalidation when policy snapshot changes for a purpose (admin-configurable strictness) |
+
+### 8.8 Relationship with Policy Engine and DLP
+
+| Component | Semantic Cache interaction |
+|-----------|----------------------------|
+| **Policy Engine** | Supplies purpose, `cache_enabled`, route eligibility, optional department scope; may disable cache for sensitive purposes entirely |
+| **DLP** | Gate for **eligibility**: only **clean, non-sensitive** content is read or written; redacted text is **not** stored as a shared key/value |
+| **Routing / Adapters** | Miss path only; hits skip provider call but still emit metering (cache_hit, stored model attribution) |
+| **Metering** | Track hit rate, savings estimates, latency; target **8%+** as a directional enterprise KPI after baseline |
+
+**Order:** Policy and DLP always run **before** a cache hit is returned to the client or a new entry is written. The cache is an optimization under governance, never a side door around it.
+
+### 8.9 Operability notes
+
+- **Bypass on failure:** if Vector DB or embedding service is down, log and continue to Routing (do not fail the user request solely for cache).
+- **Tuning:** raise threshold if wrong answers appear; lower carefully if hit rate is starved and spot-checks look safe; tune **per purpose**.
+- **Agents:** often benefit from modest hit rates on repeated tool/planning prompts; still subject to the same sensitivity and DLP rules.
+
+See **[ADR-005: Semantic Cache](adr/005-semantic-cache.md)** for the decision record.
+
+---
+
+## 9. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
@@ -529,8 +666,8 @@ Sections to be added as design deepens:
 - [x] Input Guardrails / DLP (see §5, ADR-003)
 - [x] Routing Engine (see §6, ADR-004)
 - [x] Provider Adapters (see §7, ADR-004)
+- [x] Semantic Cache (see §8, ADR-005)
 - [ ] Request path sequence (happy path + failure modes)
-- [ ] Semantic cache scoping and invalidation
 - [ ] Identity, roles (Normal vs Super AI User), and service accounts (detail beyond §4.4)
 - [ ] Data model (entities, retention, redaction)
 - [ ] Observability (metrics, logs, traces) and SLOs
@@ -551,3 +688,4 @@ Sections to be added as design deepens:
 | [ADR-002](adr/002-policy-engine.md) | Locked Policy Engine (OPA) decision |
 | [ADR-003](adr/003-input-guardrails-dlp.md) | Locked Input Guardrails / DLP decision |
 | [ADR-004](adr/004-routing-and-adapters.md) | Locked Routing Engine + Provider Adapters decision |
+| [ADR-005](adr/005-semantic-cache.md) | Locked Semantic Cache decision |
