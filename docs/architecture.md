@@ -788,7 +788,149 @@ See **[ADR-006: Metering & Feedback](adr/006-metering-and-feedback.md)** for the
 
 ---
 
-## 10. Next architecture sections (planned)
+## 10. Observability
+
+> These decisions are **locked** for the initial architecture. Changes require a new ADR that supersedes [ADR-007](adr/007-observability.md).
+
+### 10.1 Responsibility
+
+Observability gives operators and security teams **health, performance, and security-signal visibility** across the Gateway without turning logs and traces into a second copy of every prompt.
+
+It owns:
+
+- **Metrics** (RED + domain-specific series) for SLOs, alerting, and capacity
+- **Structured logs** with an allow-list of fields (correlation without content leakage)
+- **Distributed traces** across policy, DLP, cache, route, and adapter hops
+- **SIEM export** of structured operational and audit-compatible events
+- **Fail-open** emission so telemetry never holds the data plane hostage
+
+It does **not** replace Metering & Feedback (business/chargeback aggregates — §9) or the **Audit Log** (authoritative policy/admin decision record). Those systems share privacy principles but serve different consumers.
+
+### 10.2 Key locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| Prompt / response content | **Never** log raw prompts or raw responses by default |
+| Break-glass / debug | Tightly controlled, **time-limited**, **audited** mode only |
+| Per-user metrics | **Toggleable**; **off by default** (aggregated / low-cardinality) |
+| Instrumentation | **OpenTelemetry** |
+| Metrics / viz / logs / traces | **Prometheus** + **Grafana** + **Loki** (or equiv.) + **Jaeger** or **Tempo** |
+| SIEM | Export structured logs and audit events to the customer SIEM |
+| Failure mode | **Fail-open** on metrics/logging/tracing failures |
+| v1 practice | RED + domain signals; allow-listed log fields; safe span attributes only |
+
+### 10.3 Preferred open-source stack
+
+| Concern | Preferred component | Notes |
+|---------|---------------------|-------|
+| Instrumentation | **OpenTelemetry** (SDK + collector) | Vendor-neutral; runs in-VPC |
+| Metrics | **Prometheus** | Pull or remote-write patterns |
+| Dashboards / alerts | **Grafana** | Shared with ops teams |
+| Logs | **Loki** (or equivalent) | Label-efficient log store |
+| Traces | **Jaeger** or **Tempo** | Pick one per deployment; OTel-compatible |
+| SIEM | Customer existing (Splunk, Chronicle, Elastic, …) | Via structured export / forwarder |
+
+Stack choice prioritises **open-source, low-cost, private deployability**. Managed equivalents inside the customer cloud are acceptable if they preserve the same privacy and fail-open contracts.
+
+### 10.4 Metrics (core + domain-specific)
+
+**RED (and latency percentiles) — every public surface:**
+
+| Signal | Intent |
+|--------|--------|
+| **Request rate** | Throughput / load |
+| **Error rate** | Reliability (by error class, not raw body) |
+| **Latency** | **p50 / p95 / p99** gateway overhead and end-to-end where measurable; TTFT for streams |
+
+**Domain-specific (Gateway):**
+
+| Signal | Intent |
+|--------|--------|
+| **Token throughput** | Cost and capacity pressure (in/out where known) |
+| **Cache hit rate** | Semantic cache effectiveness (ADR-005) |
+| **DLP actions** | Counts of allow / redact / block (not matched secret values) |
+| **Model fallback rate** | Ordered-list advancement / retries exhausted |
+| **Circuit-breaker state** | Open / half-open / closed per model or endpoint |
+| **Policy deny rate** | OPA deny / fail-closed egress outcomes |
+| **Agent vs human traffic split** | Automation load vs interactive load |
+
+**Label discipline (default):** low-cardinality dimensions such as `purpose`, `model` / `sub_model` (bounded catalogue), `destination_type`, `principal_type` (`human` \| `agent`), `status` / `error_class`, `cache_outcome`, `dlp_action`. Avoid unbounded strings and always-on `user_id` series.
+
+### 10.5 Toggleable per-user metrics
+
+| Mode | Behaviour |
+|------|-----------|
+| **Default (off)** | Aggregated / low-cardinality only — no per-user Prometheus time series |
+| **Investigation (on)** | Admin enables richer **per-user** (or per-principal) metrics for a defined window |
+| **Afterwards** | Admin **disables**; series stop (retention of already scraped points follows ops retention policy) |
+
+Enablement must be **audited** (who, when, scope, expected end time). Prefer auto-expiry of the toggle so investigation mode cannot be left on forever by accident.
+
+### 10.6 Logging rules
+
+**Structured JSON logs** (Cloud Logging–compatible shape), with a **field allow-list**.
+
+| Typically logged | Never logged (default) |
+|------------------|-------------------------|
+| Correlation / request id | **Raw prompts** |
+| Purpose, purpose provenance | **Raw responses** |
+| Model + sub-model, destination type | Full conversation transcripts |
+| Policy decision id / version, allow/deny | Secret values matched by DLP |
+| DLP action (allow/redact/block), profile id | Unbounded free-text user content |
+| Cache hit/miss, latency marks | — |
+| Error class and safe message | Stack traces that embed request bodies |
+| Principal type; hashed/pseudonymous user ref only if required and policy-approved | Stable email/UPN in high-volume info logs unless needed |
+
+**Break-glass / debug mode:**
+
+- Explicit admin (or dual-control) enablement
+- **Time-limited** (short TTL)
+- **Audited** start/stop and scope
+- Captures additional detail only under that mode; default code paths remain clean
+- Not a substitute for Conversation Memory access controls
+
+### 10.7 Tracing approach
+
+- Propagate **trace context** across data-plane hops: auth → policy → DLP → cache → route → adapter.
+- Span names reflect components; attributes follow the **same safety rules** as logs (no raw prompt/response bodies on spans by default).
+- Use traces to diagnose latency budgets (e.g. gateway overhead vs provider time) without dumping content into the trace backend.
+- Sampling: configurable; prefer head-based or tail-based policies that still protect privacy (sample decisions, not bodies).
+
+### 10.8 SIEM export
+
+- Emit **structured** operational logs and **audit-compatible events** (policy denies, DLP blocks, Super-user overrides, admin config changes, break-glass activation, per-user metrics toggle).
+- Customers forward into their existing SIEM via standard shippers (OTel, Fluent Bit, cloud log sinks, etc.).
+- Export schemas stay **metadata-oriented**; SIEM is not a backdoor for full prompt archives.
+
+### 10.9 Fail-open principle
+
+```text
+Request path (must complete)
+        │
+        ├── best-effort metrics export ──► drop/sample if backend down
+        ├── best-effort structured log ──► buffer then drop under overload
+        └── best-effort span export ────► never block stream on export fail
+```
+
+- Timeouts and circuit-breaking on telemetry exporters are mandatory.
+- A dead Grafana stack must **not** return 5xx to end users.
+- Contrast with **fail-closed egress** for Policy/DLP (ADR-002, ADR-003): security decisions fail closed; **telemetry** fails open.
+
+### 10.10 Relationship to Metering and Audit
+
+| System | Primary consumer | Grain / content |
+|--------|------------------|-----------------|
+| **Observability** (§10) | SRE / platform / security ops | Time-series, logs, traces — ops health |
+| **Metering & Feedback** (§9) | CoE / finance / product quality | Aggregates, chargeback, star ratings |
+| **Audit Log** (component #8) | Compliance / security investigation | Decisions, overrides, admin changes |
+
+All three share **privacy by default**: no raw prompts in the normal path.
+
+See **[ADR-007: Observability](adr/007-observability.md)** for the decision record.
+
+---
+
+## 11. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
@@ -799,10 +941,10 @@ Sections to be added as design deepens:
 - [x] Provider Adapters (see §7, ADR-004)
 - [x] Semantic Cache (see §8, ADR-005)
 - [x] Metering & Feedback (see §9, ADR-006)
+- [x] Observability (see §10, ADR-007)
 - [ ] Request path sequence (happy path + failure modes)
 - [ ] Identity, roles (Normal vs Super AI User), and service accounts (detail beyond §4.4)
 - [ ] Data model (entities, retention, redaction)
-- [ ] Observability (metrics, logs, traces) and SLOs
 - [ ] Deployment topology (VPC, HA, secrets)
 - [ ] Threat model and trust-boundary diagrams
 
@@ -822,3 +964,4 @@ Sections to be added as design deepens:
 | [ADR-004](adr/004-routing-and-adapters.md) | Locked Routing Engine + Provider Adapters decision |
 | [ADR-005](adr/005-semantic-cache.md) | Locked Semantic Cache decision |
 | [ADR-006](adr/006-metering-and-feedback.md) | Locked Metering & Feedback decision |
+| [ADR-007](adr/007-observability.md) | Locked Observability decision |
