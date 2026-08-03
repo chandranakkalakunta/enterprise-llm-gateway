@@ -1,7 +1,7 @@
 # Enterprise LLM Gateway — Architecture
 
 > **Status:** Architecture phase  
-> **Last updated:** 2026-07-26  
+> **Last updated:** 2026-08-03  
 > **Scope:** This document is the living architecture reference for the dedicated Enterprise LLM Gateway repository. Sections will grow component by component.
 
 
@@ -45,7 +45,7 @@ Nine core components make up the control and data planes:
 | 4 | **Semantic Cache** | Dedicated Vector DB + in-boundary embeddings; per-prompt cosine cache for DLP-clean content. See §8. |
 | 5 | **Routing Engine** | Ordered models per purpose; short capped retries; circuit breakers; quotas. See §6. |
 | 6 | **Conversation Memory** | Multi-turn context per user and conversation; hybrid hot/durable storage; attachment handling; summarisation. See §3. |
-| 7 | **Metering & Analytics** | Tokens, cost estimates, purpose, route, latency, cache outcomes; optional 1–5 star feedback as quality signals. Privacy-respecting defaults. |
+| 7 | **Metering & Analytics** | Aggregated usage analytics + 1–5 star feedback metadata; private-friendly analytical store. See §9. |
 | 8 | **Audit Log** | Immutable-style record of decisions, overrides, blocks, admin changes. SIEM export. |
 | 9 | **Admin API / Console** | CRUD for purposes, maps, roles, DLP rules, cache and memory policy. SSO-protected. |
 
@@ -657,7 +657,138 @@ See **[ADR-005: Semantic Cache](adr/005-semantic-cache.md)** for the decision re
 
 ---
 
-## 9. Next architecture sections (planned)
+## 9. Metering & Feedback
+
+> These decisions are **locked** for the initial architecture. Changes require a new ADR that supersedes [ADR-006](adr/006-metering-and-feedback.md).
+
+### 9.1 Responsibility
+
+Metering & Feedback provides **privacy-respecting usage visibility** and **quality signals** for operators, AI CoE, and finance — without becoming a permanent archive of employee prompts.
+
+It owns:
+
+- Emission and roll-up of **usage metrics** (tokens, cost estimates, purpose, route, latency, cache outcomes, principal type)
+- Storage and query of **aggregated** analytics for dashboards, chargeback/showback, and CoE reports
+- Optional **1–5 star** feedback joined to request **metadata**
+- Hot / short-term counters that feed **live dashboards** and support **rate limiting / quotas** (with Routing)
+
+It does **not** own Conversation Memory content, DLP pattern packs, or the immutable Audit Log of policy decisions (those remain separate systems). Metering writes are **async** and off the streaming hot path.
+
+### 9.2 Key locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| Long-term store | Analytical DB/warehouse preferably **inside** (or tightly peered with) the customer VPC; **ClickHouse** is a strong candidate |
+| External SaaS warehouse | Only **clean aggregates**, and only with **explicit customer opt-in** |
+| Long-term grain | Prefer **aggregates**; avoid permanent full per-request retention |
+| Hot path | Finer-grained short-term counters for dashboards and rate limiting |
+| Feedback | 1–5 stars + **rich metadata**; **no** raw prompts/responses by default |
+| Privacy default | Do **not** store raw prompts or full conversation content in the metering store |
+| Low scores | Especially **1-star** → **strong negative signals** for routing / quality analysis |
+| Economics | Explicit support for **chargeback** and **showback** |
+| v1 reports | See §9.6 |
+
+### 9.3 Storage direction
+
+| Tier | Role | Placement posture |
+|------|------|-------------------|
+| **Hot counters** | Near-real-time rates, quota enforcement inputs, ops “now” views | In-VPC with the control/data plane (e.g. Redis or equivalent) |
+| **Analytical store** | Long-term aggregates, historical dashboards, chargeback exports | Prefer **private** or **privately connected** analytical DB; ClickHouse-class systems fit high-ingest aggregation |
+| **Opt-in external warehouse** | Customer BI stack receiving **pre-aggregated, clean** tables only | Never the default path for raw or near-raw traffic |
+
+Private-first does not mean “no BI tools.” It means **raw and sensitive traffic stays governed**, and long-term analytics prefer customer-controlled analytical capacity over shipping every event to a multi-tenant SaaS by default.
+
+### 9.4 Aggregation strategy
+
+```text
+Request completes (or cache hit / block outcome)
+        │
+        ▼
+Async meter event (metadata only)
+  tokens_in/out, cost_est, purpose, model, sub_model,
+  latency, cache_hit, principal_type (human|agent),
+  department/cost_centre, policy_version, dlp_action, …
+        │
+        ├──► Hot counters (short TTL / rolling windows)
+        │      rate limits, live dashboards
+        │
+        └──► Aggregation pipeline
+               roll up by time bucket × dimensions
+               │
+               ▼
+         Analytical store (aggregates)
+               │
+               ▼
+         Reports / chargeback / CoE quality views
+```
+
+Principles:
+
+- **Do not** retain every individual request permanently as the default long-term model.
+- Aggregations must be **idempotent** enough for at-least-once delivery from the data plane.
+- Optional short-lived detail windows (hours/days) may exist for debugging ops — still **metadata-only** unless a separate, explicit retention policy allows more (out of default metering scope).
+- Cost estimates use adapter-reported tokens × configured price books (admin-maintained); exact accounting may reconcile later to provider invoices.
+
+### 9.5 Feedback handling and metadata
+
+Clients may POST an optional **1–5 star** rating after a response, tied to a request id.
+
+| Field class | Examples | Stored by default? |
+|-------------|----------|--------------------|
+| Rating | `stars` (1–5), `strong_negative` (true for 1-star, optionally 2-star) | Yes |
+| Request metadata | model, sub-model, purpose, purpose provenance, latency, cache_hit, role (Normal/Super), principal_type (human/agent), department, destination type | Yes |
+| Free-text comment | Optional future | Policy-gated; not required for v1 |
+| Raw prompt / response / thread | — | **No** by default |
+
+**Strong negative signals:** low scores (especially **1-star**) are first-class inputs for future **routing and quality analysis** (e.g. purpose × model scorecards). They do not by themselves auto-change production routes without human/admin process — but the data model must make them easy to query and weight more heavily than mid-scale ratings.
+
+Feedback writes are async, same privacy rules as metering.
+
+### 9.6 Privacy defaults
+
+- Metering store is **not** a prompt archive and **not** a substitute for Conversation Memory.
+- Default dashboards emphasise purpose, team/department, model, cost, latency, cache hit rate — **not** browsing free-text prompts.
+- User identifiers in analytics should follow enterprise identity practice (stable ids; hashing/pseudonymisation where policy requires).
+- Export to external SaaS BI only of **clean aggregates**, and only when opted in.
+
+### 9.7 Required report views (v1)
+
+| Report | Dimensions / metrics |
+|--------|----------------------|
+| Token consumption | **Per-user**, **per-department** (cost centre), **per-purpose** |
+| Cost | Estimated spend (and optional reconcile fields later) |
+| Model usage | Distribution of parent model + sub-model / variant |
+| Cache | **Hit rate** (and optional estimated tokens/cost avoided) |
+| Feedback quality | Average and distribution of stars **by model + purpose**; volume of strong negatives |
+| Principal mix | **Agent vs human** usage split (requests, tokens, cost) |
+
+These views are the minimum bar for CoE governance and finance conversations at launch of analytics.
+
+### 9.8 Relationship to rate limiting and routing quality
+
+| Consumer | How metering helps |
+|----------|--------------------|
+| **Routing / quotas** | Hot counters implement per-user, per-agent, per-purpose limits (ADR-004); warehouse is not on the deny path |
+| **Chargeback / showback** | Aggregates by department and purpose feed internal billing narratives |
+| **Future routing quality** | Feedback scorecards (especially 1-star rates) inform admin review of purpose → model ordered lists — not silent auto-routing in v1 unless product later decides otherwise under a new ADR |
+| **Semantic cache** | Hit/miss metrics validate the 8%+ directional target (ADR-005) |
+| **Audit Log** | Remains the system of record for policy denials, overrides, and admin changes; metering focuses on usage and quality |
+
+### 9.9 Path placement
+
+Metering is **downstream and asynchronous** relative to the user-visible stream:
+
+1. Policy → DLP → Cache → Route → Adapter (stream)
+2. Emit meter event(s) with outcomes
+3. Optional later: client star rating → feedback event joined on request id
+
+Failure of the analytical store must **not** fail user requests; buffer and retry meter events with backpressure and drop/sample only under extreme overload with explicit ops policy.
+
+See **[ADR-006: Metering & Feedback](adr/006-metering-and-feedback.md)** for the decision record.
+
+---
+
+## 10. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
@@ -667,6 +798,7 @@ Sections to be added as design deepens:
 - [x] Routing Engine (see §6, ADR-004)
 - [x] Provider Adapters (see §7, ADR-004)
 - [x] Semantic Cache (see §8, ADR-005)
+- [x] Metering & Feedback (see §9, ADR-006)
 - [ ] Request path sequence (happy path + failure modes)
 - [ ] Identity, roles (Normal vs Super AI User), and service accounts (detail beyond §4.4)
 - [ ] Data model (entities, retention, redaction)
@@ -689,3 +821,4 @@ Sections to be added as design deepens:
 | [ADR-003](adr/003-input-guardrails-dlp.md) | Locked Input Guardrails / DLP decision |
 | [ADR-004](adr/004-routing-and-adapters.md) | Locked Routing Engine + Provider Adapters decision |
 | [ADR-005](adr/005-semantic-cache.md) | Locked Semantic Cache decision |
+| [ADR-006](adr/006-metering-and-feedback.md) | Locked Metering & Feedback decision |
