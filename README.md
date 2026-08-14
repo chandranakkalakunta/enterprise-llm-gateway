@@ -42,6 +42,7 @@ This repository has moved out of general **ideation** into a **dedicated archite
 - **Observability** — Privacy by default (no raw prompts/responses); OTel + Prometheus + Grafana (+ Loki / Tempo or Jaeger); toggleable per-user metrics; SIEM export; fail-open. See [ADR-007](docs/adr/007-observability.md).
 - **Authentication & SSO** — Google OIDC / OAuth 2.0 for human users in v1; short-lived access + refresh tokens; static role mapping with a path to RBAC; fail-closed unauthenticated traffic; agents deferred as a distinct identity type. See [ADR-008](docs/adr/008-authentication-sso.md).
 - **Deployment Topology & HA** — Phase 1 on Google Cloud (Cloud Run + GKE hybrid); Private DC documented only; BigQuery on GCP / ClickHouse-class on Private DC; single-region HA; same binary across environments; controlled egress. See [ADR-009](docs/adr/009-deployment-topology.md).
+- **Admin Console** — UI-first configuration for Admin role only; no config visibility for non-admins; audited actions; API deferred. See [ADR-010](docs/adr/010-admin-console.md).
 
 Living architecture: [docs/architecture.md](docs/architecture.md).
 
@@ -52,7 +53,7 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
 | [docs/overview.md](docs/overview.md) | Problem statement, vision, KPIs |
 | [docs/requirements.md](docs/requirements.md) | Functional & non-functional requirements |
 | [docs/use-cases.md](docs/use-cases.md) | Personas and scenarios |
-| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through deployment topology & HA) |
+| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through Admin Console) |
 | [docs/open-questions.md](docs/open-questions.md) | Open product / technical questions |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 | [design/](design/) | Working design notes and diagrams (as they land) |
@@ -82,7 +83,8 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
         ├── 006-metering-and-feedback.md
         ├── 007-observability.md
         ├── 008-authentication-sso.md
-        └── 009-deployment-topology.md
+        ├── 009-deployment-topology.md
+        └── 010-admin-console.md
 ```
 
 ## One-sentence summary

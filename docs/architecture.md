@@ -47,7 +47,7 @@ Nine core components make up the control and data planes:
 | 6 | **Conversation Memory** | Multi-turn context per user and conversation; hybrid hot/durable storage; attachment handling; summarisation. See §3. |
 | 7 | **Metering & Analytics** | Aggregated usage analytics + 1–5 star feedback metadata; private-friendly analytical store. See §9. |
 | 8 | **Audit Log** | Immutable-style record of decisions, overrides, blocks, admin changes. SIEM export. |
-| 9 | **Admin API / Console** | CRUD for purposes, maps, roles, DLP rules, cache and memory policy. SSO-protected. |
+| 9 | **Admin Console** | UI-first configuration for **Admin role only**. Purposes, routes, DLP, quotas, cache, policy publish. SSO-protected. See §13. |
 
 **Supporting (not counted above):** **Provider Adapters** (common interface; normalise vendor quirks — see §7) and Config & Secrets (policy versions, provider keys, RAG endpoints via customer secret manager).
 
@@ -1247,13 +1247,92 @@ The Gateway remains the **policy source of truth**. Network controls are a secon
 | Conversation memory (§3) | Memorystore + Cloud SQL + Cloud Storage |
 | Metering (§9) | Cloud Run writers → **BigQuery** (ClickHouse later) |
 | Observability (§10) | In-VPC OSS or Google managed equivalent |
-| Admin API / Console | Cloud Run + same Google SSO |
+| Admin Console (§13) | Cloud Run + same Google SSO; Admin role only |
 
 See **[ADR-009: Deployment Topology & High Availability](adr/009-deployment-topology.md)** for the decision record.
 
 ---
 
-## 13. Next architecture sections (planned)
+## 13. Admin Console
+
+> These decisions are **locked** at **high level** for the initial architecture. Changes require a new ADR that supersedes [ADR-010](adr/010-admin-console.md). Screen-level UX is out of this phase.
+
+The Admin Console is how a **small number of platform admins** change Gateway configuration without a code deploy. It is **not** an end-user product and **not** the v1 automation API.
+
+### 13.1 Responsibility
+
+The console is the **human front-end** onto control-plane data that Policy, DLP, routing, and cache already consume:
+
+- Create and maintain purposes and their **ordered model lists**
+- Maintain DLP **profiles** and **custom patterns**
+- Set **rate limits / quotas**
+- Adjust **semantic-cache** settings and trigger manual invalidation
+- **Activate** (publish) a policy snapshot
+- Offer **basic operational links** to observability / metering — not a second Grafana
+
+It does **not** enforce policy on the data plane (OPA does). It does **not** own identity (the IdP does). It does **not** replace the Audit Log; it **writes** to it.
+
+### 13.2 Key locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| Primary surface | **UI-first** Admin Console |
+| API | **Secondary / deferred** — same config model, later, for automation |
+| Access | **Admin role only** |
+| Non-admin visibility | **None** — including Super AI Users |
+| Authn | Same Google SSO as the Gateway (ADR-008) |
+| Audit | **Every** admin action is audited |
+| Architecture depth (this phase) | High-level scope only |
+| Placement (GCP Phase 1) | Cloud Run (ADR-009) |
+
+### 13.3 Access control
+
+| Principal | Console |
+|-----------|---------|
+| **Admin** | Full v1 configuration surfaces |
+| **Super AI User** | **No** config visibility. Overrides stay on the **data plane** inside allowlists (ADR-002), and are audited there |
+| **Normal AI User** | **No** console access |
+| **Agents** | **No** console access |
+
+Unauthenticated or non-admin requests to console routes fail-closed (**401 / 403**) with **no catalogue leakage**. Do not ship a greyed-out admin UI that teaches non-admins what can be configured.
+
+### 13.4 v1 functional areas
+
+| Area | Admin capability |
+|------|------------------|
+| **Purposes** | Create / rename / retire; `General` is mandatory and not deletable |
+| **Ordered model lists** | Per-purpose candidate order; Super-user allowlists |
+| **DLP profiles & custom patterns** | Category → redact/block; corporate detectors without a code deploy |
+| **Rate limits / quotas** | Per user, per agent, per purpose |
+| **Cache settings** | Enable/disable per purpose, threshold / TTL, manual purge |
+| **Policy version activation** | Draft → validate → publish a snapshot the data plane pins |
+| **Operational links** | Links/status to observability and metering dashboards |
+
+Publish is **versioned**. The data plane evaluates a **pinned snapshot**, not a row mutated mid-request.
+
+### 13.5 Out of scope for the v1 console
+
+| Not in v1 console | Instead |
+|-------------------|---------|
+| Full **user management** | IdP owns users and groups |
+| Complex **visual policy builders** / Rego IDEs | Structured, form-driven (or table) editors |
+| Real-time **log / trace exploration** | Observability stack (ADR-007) |
+| Prompt / conversation browsing | Conversation Memory access paths — not the admin home |
+| Agent credential issuance | Deferred with agent identity (ADR-008) |
+
+Form-driven or structured editors are an acceptable v1 shape. A visual policy canvas is not required to operate the locked model.
+
+### 13.6 Audit
+
+Every mutating action emits an Audit Log event: actor `principal_id`, action, object type and id, snapshot version, timestamp. No secrets, no raw prompts. Read-only admin views that expose sensitive operational toggles (for example enabling per-user metrics — §10.5) are also audit-worthy.
+
+A later Admin API must reuse this same publish + audit path. The UI is first; the **model** is not UI-only.
+
+See **[ADR-010: Admin Console](adr/010-admin-console.md)** for the decision record.
+
+---
+
+## 14. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
@@ -1267,6 +1346,7 @@ Sections to be added as design deepens:
 - [x] Observability (see §10, ADR-007)
 - [x] Authentication & SSO (see §11, ADR-008)
 - [x] Deployment Topology & HA (see §12, ADR-009)
+- [x] Admin Console (see §13, ADR-010)
 - [ ] Request path sequence (happy path + failure modes)
 - [ ] Fine-grained RBAC and Agent / service-account credential issuance (beyond static mapping in §11 and roles in §4.4)
 - [ ] Data model (entities, retention, redaction)
@@ -1294,3 +1374,4 @@ Sections to be added as design deepens:
 | [ADR-007](adr/007-observability.md) | Locked Observability decision |
 | [ADR-008](adr/008-authentication-sso.md) | Locked Authentication & SSO decision |
 | [ADR-009](adr/009-deployment-topology.md) | Locked Deployment Topology & HA decision |
+| [ADR-010](adr/010-admin-console.md) | Locked Admin Console (UI-first) decision |
