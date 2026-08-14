@@ -39,6 +39,14 @@ ADR-006 left the analytical store as a private-friendly warehouse with ClickHous
 | HA (v1) | **Single-region** high availability (multi-AZ). Stronger multi-region HA left open |
 | Application model | **Same Gateway binary and configuration model** across GCP and future Private DC |
 
+### Topology
+
+Phase 1 implements **Google Cloud only**. Private Data Center is the documented future analogue — not a Phase 1 build.
+
+![High-level deployment topology](../assets/deployment-topology-overview.svg)
+
+*Figure 1. Google Cloud Phase 1 (implemented) versus Private Data Center (documented future). Same Gateway binary and configuration model.*
+
 ### Phase 1 (GCP) sketch
 
 1. Regional HTTPS load balancer in the **customer VPC**. TLS in-boundary. No anonymous backend.
@@ -50,6 +58,10 @@ ADR-006 left the analytical store as a private-friendly warehouse with ClickHous
 7. **BigQuery** receives **async, metadata-only** metering aggregates. **Cloud Storage** holds attachments.
 8. Workloads authenticate to Google APIs and data stores with **Workload Identity**. Provider keys and IdP client secrets live in **Secret Manager**.
 9. Egress to public LLM APIs is **allow-listed** (Cloud NAT and/or PSC). Internal LLM / RAG stay on private IP / PSC. Policy or DLP deny → **no packet** to a public provider.
+
+![Google Cloud Phase 1 deployment](../assets/deployment-topology-gcp-phase1.svg)
+
+*Figure 2. Detailed single-region GCP topology — hybrid Cloud Run + GKE, managed state, controlled egress.*
 
 ### Private DC (documented, not Phase 1)
 
@@ -113,8 +125,6 @@ The Gateway image, config schema, and request path do not change.
 ## Related
 
 - [Architecture §12 — Deployment Topology & High Availability](../architecture.md#12-deployment-topology--high-availability)
-- [High-level topology diagram](../assets/deployment-topology-overview.svg)
-- [GCP Phase 1 detailed diagram](../assets/deployment-topology-gcp-phase1.svg)
 - Requirements: private deployment NFR; F12 (horizontal scale)
 - [ADR-001: Conversation Memory Storage](001-conversation-memory-storage.md)
 - [ADR-005: Semantic Cache](005-semantic-cache.md)

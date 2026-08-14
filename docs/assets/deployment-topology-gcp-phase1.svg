@@ -1,166 +1,140 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 820" width="1280" height="820" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="1280" height="800" role="img" aria-labelledby="title desc">
   <title id="title">Enterprise LLM Gateway — Google Cloud Phase 1 detailed topology</title>
-  <desc id="desc">Single-region GCP deployment: HTTPS load balancer, Cloud Run plus GKE hybrid compute, Cloud SQL, Memorystore, private Vector DB, BigQuery, Cloud Storage, Secret Manager and Workload Identity, observability in-VPC or managed, and controlled egress via Private Google Access, PSC, and allow-listed NAT.</desc>
-  <defs>
-    <style>
-      .bg { fill: #0f1419; }
-      .vpc { fill: #141c28; stroke: #4a90c8; stroke-width: 2; }
-      .zone { fill: #1a2433; stroke: #3d5270; stroke-width: 1.2; }
-      .run { fill: #1d2c44; stroke: #6aa3d4; stroke-width: 1.2; }
-      .gke { fill: #1d2a3a; stroke: #7db0d8; stroke-width: 1.2; }
-      .data { fill: #17261f; stroke: #5aaa7a; stroke-width: 1.2; }
-      .sec { fill: #2a2418; stroke: #c9a227; stroke-width: 1.2; }
-      .obs { fill: #22182a; stroke: #a888c8; stroke-width: 1.2; }
-      .ext { fill: #2a1c1c; stroke: #d08070; stroke-width: 1.2; }
-      .t { font-family: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif; fill: #e8eef5; }
-      .h { font-size: 18px; font-weight: 650; }
-      .s { font-size: 12px; fill: #b7c4d4; }
-      .xs { font-size: 11px; fill: #9aabbd; }
-      .label { font-size: 12.5px; font-weight: 600; fill: #d7e4f2; }
-      .cap { font-size: 11px; fill: #8aa0b8; letter-spacing: 0.05em; }
-      .arrow { stroke: #8eb4d4; stroke-width: 1.4; fill: none; marker-end: url(#ah); }
-      .arrow-hot { stroke: #e08a6a; stroke-width: 1.4; fill: none; marker-end: url(#ah-hot); }
-    </style>
-    <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,0 L8,4 L0,8 Z" fill="#8eb4d4"/>
-    </marker>
-    <marker id="ah-hot" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,0 L8,4 L0,8 Z" fill="#e08a6a"/>
-    </marker>
-  </defs>
-  <rect class="bg" width="1280" height="820"/>
-  <text class="t h" x="28" y="34">Google Cloud — Phase 1 detailed topology (single-region HA)</text>
-  <text class="t s" x="28" y="54">Hybrid compute: Cloud Run (stateless) + GKE (sidecars / advanced networking). Same Gateway binary as the future Private DC target.</text>
+  <desc id="desc">Single-region GCP deployment: HTTPS load balancer, Cloud Run plus GKE, Cloud SQL, Memorystore, private Vector DB, BigQuery, Cloud Storage, Secret Manager and Workload Identity, observability, and controlled egress.</desc>
+  <rect width="1280" height="800" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
+  <text x="24" y="34" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#1a2332">Google Cloud Phase 1 — detailed topology</text>
+  <text x="24" y="54" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#57606a">Single-region HA · hybrid Cloud Run + GKE · same Gateway binary as the future Private DC target · fail-closed unauthenticated traffic</text>
 
-  <!-- Left: clients + IdP -->
-  <rect class="ext" x="20" y="76" width="176" height="228" rx="8"/>
-  <text class="t cap" x="36" y="98">ENTERPRISE EDGE</text>
-  <rect class="run" x="36" y="114" width="144" height="40" rx="4"/>
-  <text class="t label" x="48" y="139">Users / IDEs / apps</text>
-  <rect class="sec" x="36" y="164" width="144" height="40" rx="4"/>
-  <text class="t label" x="48" y="189">Google IdP (OIDC)</text>
-  <rect class="ext" x="36" y="214" width="144" height="70" rx="4"/>
-  <text class="t label" x="48" y="240">No anonymous path</text>
-  <text class="t xs" x="48" y="258">Fail-closed at the edge</text>
-  <text class="t xs" x="48" y="274">and in the Gateway</text>
+  <!-- Edge -->
+  <rect x="16" y="72" width="176" height="240" rx="8" fill="#fff8e8" stroke="#c69026" stroke-width="1.4"/>
+  <text x="28" y="96" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#7d5a00">ENTERPRISE EDGE</text>
+  <rect x="28" y="110" width="152" height="40" rx="5" fill="#ffffff" stroke="#5b8fc7"/>
+  <text x="40" y="135" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Users / IDEs / apps</text>
+  <rect x="28" y="160" width="152" height="40" rx="5" fill="#ffffff" stroke="#c69026"/>
+  <text x="40" y="185" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Google IdP (OIDC)</text>
+  <rect x="28" y="210" width="152" height="80" rx="5" fill="#fdecec" stroke="#c05621"/>
+  <text x="40" y="236" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">No anonymous path</text>
+  <text x="40" y="254" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Fail-closed at the edge</text>
+  <text x="40" y="270" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">and in the Gateway</text>
 
-  <line class="arrow" x1="196" y1="134" x2="230" y2="134"/>
+  <path d="M192 130 H216" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
 
   <!-- VPC -->
-  <rect class="vpc" x="228" y="76" width="800" height="668" rx="10"/>
-  <text class="t cap" x="248" y="98">CUSTOMER VPC  ·  SINGLE REGION  ·  MULTI-AZ</text>
+  <rect x="216" y="72" width="820" height="708" rx="10" fill="#e8f1fa" stroke="#2b6cb0" stroke-width="2"/>
+  <text x="232" y="96" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#1e3a5f">CUSTOMER VPC  ·  SINGLE REGION  ·  MULTI-AZ</text>
 
-  <!-- Ingress -->
-  <rect class="sec" x="248" y="114" width="760" height="56" rx="6"/>
-  <text class="t label" x="264" y="136">Regional HTTPS Application Load Balancer  +  identity-aware / allow-listed ingress</text>
-  <text class="t xs" x="264" y="156">TLS terminated in-boundary. Unauthenticated requests rejected. Streaming pass-through to the data plane.</text>
+  <rect x="232" y="110" width="788" height="52" rx="6" fill="#fff8e8" stroke="#c69026"/>
+  <text x="246" y="132" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#1a2332">Regional HTTPS Application Load Balancer  ·  private backends</text>
+  <text x="246" y="150" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">TLS in-boundary · streaming pass-through · unauthenticated requests rejected</text>
 
-  <!-- Compute row -->
-  <rect class="run" x="248" y="188" width="360" height="188" rx="6"/>
-  <text class="t cap" x="264" y="210">CLOUD RUN  ·  STATELESS / SUITABLE SERVICES</text>
-  <rect class="run" x="264" y="224" width="152" height="44" rx="4"/>
-  <text class="t label" x="276" y="251">Admin API</text>
-  <rect class="run" x="428" y="224" width="160" height="44" rx="4"/>
-  <text class="t label" x="440" y="251">Metering writers</text>
-  <rect class="run" x="264" y="280" width="152" height="44" rx="4"/>
-  <text class="t label" x="276" y="307">Config publish</text>
-  <rect class="run" x="428" y="280" width="160" height="44" rx="4"/>
-  <text class="t label" x="440" y="307">Async workers</text>
-  <text class="t xs" x="264" y="346">May later move to GKE if sidecars or</text>
-  <text class="t xs" x="264" y="362">networking needs grow.</text>
+  <!-- Cloud Run -->
+  <rect x="232" y="178" width="380" height="176" rx="6" fill="#ffffff" stroke="#2b6cb0"/>
+  <text x="246" y="200" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#1e3a5f">CLOUD RUN  ·  STATELESS</text>
+  <rect x="246" y="214" width="168" height="40" rx="5" fill="#eef4fb" stroke="#5b8fc7"/>
+  <text x="258" y="239" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Admin API</text>
+  <rect x="426" y="214" width="170" height="40" rx="5" fill="#eef4fb" stroke="#5b8fc7"/>
+  <text x="438" y="239" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Metering writers</text>
+  <rect x="246" y="264" width="168" height="40" rx="5" fill="#eef4fb" stroke="#5b8fc7"/>
+  <text x="258" y="289" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Config publish</text>
+  <rect x="426" y="264" width="170" height="40" rx="5" fill="#eef4fb" stroke="#5b8fc7"/>
+  <text x="438" y="289" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Async workers</text>
+  <text x="246" y="328" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">May later move to GKE if sidecar needs grow.</text>
+  <text x="246" y="344" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">One image — only the runtime changes.</text>
 
-  <rect class="gke" x="624" y="188" width="384" height="188" rx="6"/>
-  <text class="t cap" x="640" y="210">GKE  ·  SIDECARS / ADVANCED NETWORKING</text>
-  <rect class="gke" x="640" y="224" width="168" height="44" rx="4"/>
-  <text class="t label" x="652" y="251">Data plane / proxy</text>
-  <rect class="gke" x="820" y="224" width="168" height="44" rx="4"/>
-  <text class="t label" x="832" y="251">OPA sidecar</text>
-  <rect class="gke" x="640" y="280" width="168" height="44" rx="4"/>
-  <text class="t label" x="652" y="307">DLP + embeddings</text>
-  <rect class="gke" x="820" y="280" width="168" height="44" rx="4"/>
-  <text class="t label" x="832" y="307">Adapters (stream)</text>
-  <text class="t xs" x="640" y="346">Regional cluster. OPA, local NER, and</text>
-  <text class="t xs" x="640" y="362">in-boundary embedding models live here.</text>
+  <!-- GKE -->
+  <rect x="628" y="178" width="392" height="176" rx="6" fill="#ffffff" stroke="#2b6cb0"/>
+  <text x="642" y="200" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#1e3a5f">GKE  ·  SIDECARS / NETWORKING</text>
+  <rect x="642" y="214" width="176" height="40" rx="5" fill="#eef4fb" stroke="#2b6cb0"/>
+  <text x="654" y="239" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Data plane / proxy</text>
+  <rect x="828" y="214" width="176" height="40" rx="5" fill="#eef4fb" stroke="#2b6cb0"/>
+  <text x="840" y="239" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">OPA sidecar</text>
+  <rect x="642" y="264" width="176" height="40" rx="5" fill="#eef4fb" stroke="#2b6cb0"/>
+  <text x="654" y="289" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">DLP + embeddings</text>
+  <rect x="828" y="264" width="176" height="40" rx="5" fill="#eef4fb" stroke="#2b6cb0"/>
+  <text x="840" y="289" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Adapters (stream)</text>
+  <text x="642" y="328" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Regional cluster. Local NER and in-boundary</text>
+  <text x="642" y="344" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">embedding models live here.</text>
 
-  <line class="arrow" x1="628" y1="142" x2="428" y2="188"/>
-  <line class="arrow" x1="720" y1="170" x2="780" y2="188"/>
+  <!-- Stateful -->
+  <rect x="232" y="370" width="788" height="148" rx="6" fill="#eaf6ef" stroke="#2f855a"/>
+  <text x="246" y="392" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#276749">STATEFUL  ·  MANAGED, PRIVATE, HA IN-REGION</text>
+  <rect x="246" y="406" width="180" height="48" rx="5" fill="#ffffff" stroke="#2f855a"/>
+  <text x="258" y="426" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Cloud SQL PG (HA)</text>
+  <text x="258" y="442" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">durable memory / policy</text>
+  <rect x="438" y="406" width="180" height="48" rx="5" fill="#ffffff" stroke="#2f855a"/>
+  <text x="450" y="426" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Memorystore Redis</text>
+  <text x="450" y="442" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">hot set + counters</text>
+  <rect x="630" y="406" width="180" height="48" rx="5" fill="#ffffff" stroke="#2f855a"/>
+  <text x="642" y="426" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Private Vector DB</text>
+  <text x="642" y="442" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">semantic cache</text>
+  <rect x="822" y="406" width="182" height="48" rx="5" fill="#ffffff" stroke="#2f855a"/>
+  <text x="834" y="426" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Cloud Storage</text>
+  <text x="834" y="442" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">attachments</text>
+  <rect x="246" y="466" width="366" height="36" rx="5" fill="#ffffff" stroke="#2f855a"/>
+  <text x="258" y="489" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Conversation memory: Redis hot + Cloud SQL durable (ADR-001)</text>
+  <rect x="626" y="466" width="378" height="36" rx="5" fill="#ffffff" stroke="#2f855a"/>
+  <text x="638" y="489" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Semantic cache vectors stay in-boundary (ADR-005)</text>
 
-  <!-- Data plane -->
-  <rect class="data" x="248" y="396" width="760" height="148" rx="6"/>
-  <text class="t cap" x="264" y="418">STATEFUL  ·  MANAGED, PRIVATE, HA IN-REGION</text>
-  <rect class="data" x="264" y="432" width="170" height="52" rx="4"/>
-  <text class="t label" x="276" y="454">Cloud SQL</text>
-  <text class="t xs" x="276" y="472">PostgreSQL HA</text>
-  <rect class="data" x="446" y="432" width="170" height="52" rx="4"/>
-  <text class="t label" x="458" y="454">Memorystore</text>
-  <text class="t xs" x="458" y="472">Redis HA</text>
-  <rect class="data" x="628" y="432" width="170" height="52" rx="4"/>
-  <text class="t label" x="640" y="454">Vector DB</text>
-  <text class="t xs" x="640" y="472">private-friendly</text>
-  <rect class="data" x="810" y="432" width="178" height="52" rx="4"/>
-  <text class="t label" x="822" y="454">Cloud Storage</text>
-  <text class="t xs" x="822" y="472">attachments</text>
-  <rect class="data" x="264" y="496" width="352" height="32" rx="4"/>
-  <text class="t xs" x="276" y="516">Conversation memory: Redis hot + Cloud SQL durable (ADR-001)</text>
-  <rect class="data" x="628" y="496" width="360" height="32" rx="4"/>
-  <text class="t xs" x="640" y="516">Semantic cache vectors stay in-boundary (ADR-005)</text>
+  <!-- Bottom row inside VPC -->
+  <rect x="232" y="534" width="248" height="226" rx="6" fill="#fff8e8" stroke="#c69026"/>
+  <text x="246" y="558" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#7d5a00">SECRETS + IDENTITY</text>
+  <rect x="246" y="572" width="220" height="40" rx="5" fill="#ffffff" stroke="#c69026"/>
+  <text x="258" y="597" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Secret Manager</text>
+  <rect x="246" y="622" width="220" height="40" rx="5" fill="#ffffff" stroke="#c69026"/>
+  <text x="258" y="647" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Workload Identity</text>
+  <text x="246" y="688" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">No long-lived keys on disk.</text>
+  <text x="246" y="706" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">No secrets in the image.</text>
+  <text x="246" y="736" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">CMEK / VPC-SC expected on</text>
+  <text x="246" y="752" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">the customer project.</text>
 
-  <!-- Security + analytics + obs -->
-  <rect class="sec" x="248" y="564" width="244" height="160" rx="6"/>
-  <text class="t cap" x="264" y="586">SECRETS + IDENTITY</text>
-  <rect class="sec" x="264" y="600" width="212" height="40" rx="4"/>
-  <text class="t label" x="276" y="625">Secret Manager</text>
-  <rect class="sec" x="264" y="650" width="212" height="40" rx="4"/>
-  <text class="t label" x="276" y="675">Workload Identity</text>
-  <text class="t xs" x="264" y="708">No long-lived keys on disk.</text>
+  <rect x="496" y="534" width="256" height="226" rx="6" fill="#eaf6ef" stroke="#2f855a"/>
+  <text x="510" y="558" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#276749">ANALYTICS (GCP)</text>
+  <rect x="510" y="572" width="228" height="52" rx="5" fill="#ffffff" stroke="#2f855a"/>
+  <text x="522" y="594" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#1a2332">BigQuery</text>
+  <text x="522" y="612" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">metering aggregates</text>
+  <text x="510" y="652" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Async metadata events only.</text>
+  <text x="510" y="670" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Same interface on Private DC</text>
+  <text x="510" y="688" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">via ClickHouse (or equivalent).</text>
+  <text x="510" y="720" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Not on the request deny path.</text>
 
-  <rect class="data" x="508" y="564" width="244" height="160" rx="6"/>
-  <text class="t cap" x="524" y="586">ANALYTICS (GCP)</text>
-  <rect class="data" x="524" y="600" width="212" height="52" rx="4"/>
-  <text class="t label" x="536" y="622">BigQuery</text>
-  <text class="t xs" x="536" y="640">metering aggregates</text>
-  <text class="t xs" x="524" y="672">Interface stays the same;</text>
-  <text class="t xs" x="524" y="688">Private DC uses ClickHouse</text>
-  <text class="t xs" x="524" y="704">(or equivalent).</text>
+  <rect x="768" y="534" width="252" height="226" rx="6" fill="#f3e8ff" stroke="#805ad5"/>
+  <text x="782" y="558" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#553c9a">OBSERVABILITY</text>
+  <text x="782" y="586" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#1a2332">Prometheus / Grafana</text>
+  <text x="782" y="608" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#1a2332">Loki + Tempo</text>
+  <text x="782" y="630" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#57606a">or Google managed equivalent</text>
+  <text x="782" y="662" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Fail-open telemetry (ADR-007)</text>
+  <text x="782" y="680" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">No raw prompts in default logs</text>
+  <text x="782" y="698" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">SIEM export: metadata only</text>
 
-  <rect class="obs" x="768" y="564" width="240" height="160" rx="6"/>
-  <text class="t cap" x="784" y="586">OBSERVABILITY</text>
-  <text class="t label" x="784" y="616">Prometheus / Grafana</text>
-  <text class="t label" x="784" y="636">Loki + Tempo  (or)</text>
-  <text class="t label" x="784" y="656">Google managed equiv.</text>
-  <text class="t xs" x="784" y="684">Fail-open telemetry</text>
-  <text class="t xs" x="784" y="700">SIEM export (ADR-007)</text>
+  <!-- Egress column -->
+  <rect x="1052" y="72" width="212" height="708" rx="8" fill="#fdecec" stroke="#c05621" stroke-width="1.5"/>
+  <text x="1066" y="96" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="0.05em" fill="#9c4221">CONTROLLED EGRESS</text>
+  <rect x="1066" y="110" width="184" height="64" rx="5" fill="#ffffff" stroke="#c69026"/>
+  <text x="1078" y="134" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">PGA / PSC</text>
+  <text x="1078" y="152" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">+ explicit allow-lists</text>
+  <rect x="1066" y="186" width="184" height="52" rx="5" fill="#ffffff" stroke="#c05621"/>
+  <text x="1078" y="208" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Cloud NAT</text>
+  <text x="1078" y="226" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">allow-listed only</text>
+  <rect x="1066" y="250" width="184" height="64" rx="5" fill="#ffffff" stroke="#c05621"/>
+  <text x="1078" y="274" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Public LLM APIs</text>
+  <text x="1078" y="292" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">only after Policy + DLP</text>
+  <rect x="1066" y="326" width="184" height="64" rx="5" fill="#ffffff" stroke="#2f855a"/>
+  <text x="1078" y="350" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Internal LLM / RAG</text>
+  <text x="1078" y="368" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">private IP / PSC / in-VPC</text>
+  <rect x="1066" y="402" width="184" height="56" rx="5" fill="#ffffff" stroke="#805ad5"/>
+  <text x="1078" y="426" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1a2332">Customer SIEM</text>
+  <text x="1078" y="444" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">structured export</text>
+  <text x="1066" y="488" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Default deny. Fail-closed</text>
+  <text x="1066" y="506" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">on Policy / DLP / auth</text>
+  <text x="1066" y="524" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">failure. No open 0.0.0.0</text>
+  <text x="1066" y="542" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">egress from workloads.</text>
+  <text x="1066" y="572" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Multi-region HA is not</text>
+  <text x="1066" y="590" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">Phase 1. Design stays</text>
+  <text x="1066" y="608" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#57606a">portable for later.</text>
 
-  <!-- Right: egress -->
-  <rect class="ext" x="1048" y="76" width="212" height="668" rx="8"/>
-  <text class="t cap" x="1064" y="98">CONTROLLED EGRESS</text>
-  <rect class="sec" x="1064" y="114" width="180" height="72" rx="4"/>
-  <text class="t label" x="1076" y="138">Private Google</text>
-  <text class="t label" x="1076" y="156">Access / PSC</text>
-  <text class="t xs" x="1076" y="174">+ explicit allow-lists</text>
-  <rect class="ext" x="1064" y="204" width="180" height="56" rx="4"/>
-  <text class="t label" x="1076" y="228">Cloud NAT</text>
-  <text class="t xs" x="1076" y="246">allow-listed only</text>
-  <rect class="ext" x="1064" y="280" width="180" height="72" rx="4"/>
-  <text class="t label" x="1076" y="304">Public LLM APIs</text>
-  <text class="t xs" x="1076" y="322">only after Policy +</text>
-  <text class="t xs" x="1076" y="338">DLP allow egress</text>
-  <rect class="data" x="1064" y="372" width="180" height="72" rx="4"/>
-  <text class="t label" x="1076" y="396">Internal LLM / RAG</text>
-  <text class="t xs" x="1076" y="414">private IP / PSC /</text>
-  <text class="t xs" x="1076" y="430">in-VPC peers</text>
-  <rect class="obs" x="1064" y="464" width="180" height="72" rx="4"/>
-  <text class="t label" x="1076" y="488">Customer SIEM</text>
-  <text class="t xs" x="1076" y="506">structured export</text>
-  <text class="t xs" x="1076" y="522">metadata only</text>
-  <text class="t xs" x="1064" y="564">Default deny. Fail-closed</text>
-  <text class="t xs" x="1064" y="580">on Policy/DLP/auth</text>
-  <text class="t xs" x="1064" y="596">failure. No open 0.0.0.0</text>
-  <text class="t xs" x="1064" y="612">egress from workloads.</text>
-  <text class="t xs" x="1064" y="640">Multi-region HA is not</text>
-  <text class="t xs" x="1064" y="656">Phase 1. Design stays</text>
-  <text class="t xs" x="1064" y="672">portable for later.</text>
-
-  <line class="arrow-hot" x1="1028" y1="280" x2="1048" y2="310"/>
-  <line class="arrow" x1="1028" y1="226" x2="1048" y2="400"/>
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#57606a"/>
+    </marker>
+  </defs>
 </svg>

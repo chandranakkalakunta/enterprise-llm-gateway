@@ -38,7 +38,7 @@ This repository has moved out of general **ideation** into a **dedicated archite
 - **Input Guardrails / DLP** — Regex + ML/NER (no public LLM for DLP); default redact, hard block for high-sensitivity; admin custom patterns; text-only in v1. See [ADR-003](docs/adr/003-input-guardrails-dlp.md).
 - **Routing + Adapters** — Admin-ordered models per purpose; short capped retries; circuit breakers; common adapter interface; mandatory model attribution; stronger agent rate limits; periodic + manual model discovery. See [ADR-004](docs/adr/004-routing-and-adapters.md).
 - **Semantic Cache** — Dedicated Vector DB; in-boundary bge/nomic-class embeddings; cosine ~0.88–0.90; per-prompt cache for DLP-clean content only; TTL + manual + source-doc invalidation. See [ADR-005](docs/adr/005-semantic-cache.md).
-- **Metering & Feedback** — Private-friendly analytical store (ClickHouse strong candidate); aggregated long-term data; 1–5 star feedback with metadata only; chargeback/showback-ready. See [ADR-006](docs/adr/006-metering-and-feedback.md).
+- **Metering & Feedback** — Private-friendly analytical store; **BigQuery** on GCP Phase 1 and **ClickHouse-class** on Private DC; aggregated long-term data; 1–5 star feedback with metadata only; chargeback/showback-ready. See [ADR-006](docs/adr/006-metering-and-feedback.md) and [ADR-009](docs/adr/009-deployment-topology.md).
 - **Observability** — Privacy by default (no raw prompts/responses); OTel + Prometheus + Grafana (+ Loki / Tempo or Jaeger); toggleable per-user metrics; SIEM export; fail-open. See [ADR-007](docs/adr/007-observability.md).
 - **Authentication & SSO** — Google OIDC / OAuth 2.0 for human users in v1; short-lived access + refresh tokens; static role mapping with a path to RBAC; fail-closed unauthenticated traffic; agents deferred as a distinct identity type. See [ADR-008](docs/adr/008-authentication-sso.md).
 - **Deployment Topology & HA** — Phase 1 on Google Cloud (Cloud Run + GKE hybrid); Private DC documented only; BigQuery on GCP / ClickHouse-class on Private DC; single-region HA; same binary across environments; controlled egress. See [ADR-009](docs/adr/009-deployment-topology.md).
@@ -69,7 +69,10 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
     ├── overview.md
     ├── use-cases.md
     ├── open-questions.md
-    ├── assets/             # Diagrams (high-level + GCP Phase 1 topology)
+    ├── assets/
+    │   ├── logical-component-diagram.svg
+    │   ├── deployment-topology-overview.svg
+    │   └── deployment-topology-gcp-phase1.svg
     └── adr/
         ├── 001-conversation-memory-storage.md
         ├── 002-policy-engine.md

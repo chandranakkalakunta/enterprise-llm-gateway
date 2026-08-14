@@ -51,25 +51,11 @@ Nine core components make up the control and data planes:
 
 **Supporting (not counted above):** **Provider Adapters** (common interface; normalise vendor quirks — see §7) and Config & Secrets (policy versions, provider keys, RAG endpoints via customer secret manager).
 
-```text
-Clients (IDE / Chat / Apps / Agents / Batch)
-        │
-        ▼
-┌───────────────────────────────────────────────┐
-│           Customer VPC / Private deploy         │
-│  Authn → API Gateway → Policy → DLP → Cache → Route
-│       │              │                          │
-│  Conversation     Metering + Audit              │
-│     Memory        Admin Console (SSO)           │
-└───────────┬───────────────┬───────────────────┘
-            │               │
-     Public LLMs     Internal LLMs / RAG
-   (controlled egress)
-```
+![Logical component diagram](assets/logical-component-diagram.svg)
 
-Authentication is **first** on every request (fail-closed). See **§11**.
+*Figure 1. Users and applications, Gateway components, internal resources, and external LLMs. Authentication is first on every request (fail-closed). Public models are reached only via controlled egress. See **§11** and **§12**.*
 
-Further detail for each component will be expanded in dedicated subsections and ADRs as decisions lock.
+Further detail for each component is expanded in the dedicated subsections and ADRs below.
 
 ---
 
@@ -1141,22 +1127,21 @@ It does **not** change the request path in §11.9. Auth is still first; Policy a
 | HA (v1) | **Single-region** (multi-AZ). Multi-region left open |
 | Application model | **Same binary + config schema** across environments |
 
-### 12.3 Diagrams
+### 12.3 High-level topology (GCP vs Private DC)
 
-Multi-level views live as image assets in this repository:
-
-| View | Asset |
-|------|--------|
-| High-level topology (trust boundary, request path, destinations) | [docs/assets/deployment-topology-overview.svg](assets/deployment-topology-overview.svg) |
-| Detailed GCP Phase 1 (compute, stateful, secrets, egress) | [docs/assets/deployment-topology-gcp-phase1.svg](assets/deployment-topology-gcp-phase1.svg) |
+Phase 1 **implements the left-hand environment**. The right-hand Private DC column is the documented analogue so GCP APIs do not leak into the application core.
 
 ![High-level deployment topology](assets/deployment-topology-overview.svg)
 
-![Google Cloud Phase 1 detailed topology](assets/deployment-topology-gcp-phase1.svg)
+*Figure 2. Google Cloud Phase 1 (implemented) versus Private Data Center (documented future). Same Gateway binary and configuration model. Single-region HA in v1.*
 
 ### 12.4 Google Cloud (Phase 1) topology
 
 Everything below runs in a **customer-owned GCP project / VPC**, single region, multiple zones.
+
+![Google Cloud Phase 1 detailed topology](assets/deployment-topology-gcp-phase1.svg)
+
+*Figure 3. Detailed single-region GCP topology: hybrid Cloud Run + GKE, managed state, Secret Manager and Workload Identity, observability, and controlled egress.*
 
 **Ingress.** A regional HTTPS Application Load Balancer terminates TLS in-boundary. Backends are private. There is **no anonymous data-plane path** — missing or invalid identity is rejected at the Gateway (ADR-008), and the edge must not offer a public “open proxy.”
 
@@ -1297,8 +1282,9 @@ Sections to be added as design deepens:
 | [Requirements](requirements.md) | Functional and non-functional requirements |
 | [Use cases](use-cases.md) | Personas and scenarios |
 | [Open questions](open-questions.md) | Unresolved product / tech risks |
-| [High-level topology](assets/deployment-topology-overview.svg) | Overview deployment diagram |
-| [GCP Phase 1 topology](assets/deployment-topology-gcp-phase1.svg) | Detailed GCP diagram |
+| [Logical component diagram](assets/logical-component-diagram.svg) | Users, Gateway, internal resources, external LLMs |
+| [High-level topology](assets/deployment-topology-overview.svg) | GCP Phase 1 vs Private DC |
+| [GCP Phase 1 topology](assets/deployment-topology-gcp-phase1.svg) | Detailed GCP deployment |
 | [ADR-001](adr/001-conversation-memory-storage.md) | Locked memory storage decision |
 | [ADR-002](adr/002-policy-engine.md) | Locked Policy Engine (OPA) decision |
 | [ADR-003](adr/003-input-guardrails-dlp.md) | Locked Input Guardrails / DLP decision |
