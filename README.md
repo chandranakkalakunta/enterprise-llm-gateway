@@ -70,7 +70,7 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
     ├── use-cases.md
     ├── open-questions.md
     ├── assets/
-    │   ├── logical-component-diagram.svg
+    │   ├── logical-component-diagram.jpg
     │   ├── deployment-topology-overview.svg
     │   └── deployment-topology-gcp-phase1.svg
     └── adr/

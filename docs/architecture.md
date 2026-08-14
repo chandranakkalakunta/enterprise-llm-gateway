@@ -51,7 +51,7 @@ Nine core components make up the control and data planes:
 
 **Supporting (not counted above):** **Provider Adapters** (common interface; normalise vendor quirks — see §7) and Config & Secrets (policy versions, provider keys, RAG endpoints via customer secret manager).
 
-![Logical component diagram](assets/logical-component-diagram.svg)
+![Logical component diagram](assets/logical-component-diagram.jpg)
 
 *Figure 1. Users and applications, Gateway components, internal resources, and external LLMs. Authentication is first on every request (fail-closed). Public models are reached only via controlled egress. See **§11** and **§12**.*
 
@@ -1282,7 +1282,7 @@ Sections to be added as design deepens:
 | [Requirements](requirements.md) | Functional and non-functional requirements |
 | [Use cases](use-cases.md) | Personas and scenarios |
 | [Open questions](open-questions.md) | Unresolved product / tech risks |
-| [Logical component diagram](assets/logical-component-diagram.svg) | Users, Gateway, internal resources, external LLMs |
+| [Logical component diagram](assets/logical-component-diagram.jpg) | Users, Gateway, internal resources, external LLMs |
 | [High-level topology](assets/deployment-topology-overview.svg) | GCP Phase 1 vs Private DC |
 | [GCP Phase 1 topology](assets/deployment-topology-gcp-phase1.svg) | Detailed GCP deployment |
 | [ADR-001](adr/001-conversation-memory-storage.md) | Locked memory storage decision |
