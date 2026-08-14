@@ -1,5 +1,7 @@
 # Requirements
 
+> Architecture decisions that implement these requirements are locked in ADR-001–010. Checkboxes remain **unchecked** until Implementation delivers them. Agent identity (F17) is designed as a distinct type and **deferred** for issuance (see [backlog](backlog.md) B1).
+
 ## Goals
 
 - Act as the single entry point for all LLM-related work in the enterprise (commercial LLMs, customer-hosted/open-source LLMs, and internal RAG).
@@ -61,7 +63,7 @@
 - Aggregated reports that help the enterprise understand usage patterns and cost drivers.
 - 1–5 star feedback linked to request metadata (privacy-preserving).
 
-**Open decision:** Whether to store token consumption at the individual request level or only in aggregated form.
+**Metering grain (resolved — ADR-006):** Long-term store prefers **aggregates**, not permanent full per-request rows. Hot / short-term counters remain finer-grained for dashboards and rate limiting. External SaaS warehouses receive clean aggregates only, with explicit opt-in. Environment mapping: BigQuery on GCP Phase 1; ClickHouse-class on Private DC (ADR-009).
 
 ## Non-Functional Requirements
 

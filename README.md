@@ -1,6 +1,6 @@
 # Enterprise LLM Gateway
 
-> **Status:** Architecture phase  
+> **Status:** Architecture **complete** — Implementation not started  
 > **Repository:** [chandranakkalakunta/enterprise-llm-gateway](https://github.com/chandranakkalakunta/enterprise-llm-gateway)  
 > **Owner:** Chandran Nakkalakunta
 
@@ -18,33 +18,37 @@ It enforces:
 - Strict per-user, per-conversation memory  
 - Privacy-respecting metering and analytics  
 
-Preferred deployment is **inside the corporate firewall / private VPC**.
+Preferred deployment is **inside the corporate firewall / private VPC**. **Phase 1 implements on Google Cloud.**
 
 ## Current status
-
-This repository has moved out of general **ideation** into a **dedicated architecture & design** home.
 
 | Phase | Status |
 |-------|--------|
 | Ideation / problem framing | Done (migrated from `ideas`) |
 | Requirements baseline | Captured under `docs/` |
-| Architecture | **In progress** |
-| Implementation | Not started |
+| Architecture | **Complete** (2026-08-14) — [closure report](docs/phase-closure/architecture-phase.md) |
+| Implementation | **Not started** |
 
-**Locked so far:**
+Living architecture: [docs/architecture.md](docs/architecture.md). Deferrals: [docs/backlog.md](docs/backlog.md).
 
-- **Conversation Memory** — Redis (hot) + Managed PostgreSQL (durable) + object storage for attachments. See [ADR-001](docs/adr/001-conversation-memory-storage.md).
-- **Policy Engine** — Open Policy Agent (OPA); optional purpose with small/fast LLM auto-classification; admin-managed purposes with mandatory `General` fallback; fail-closed external egress. See [ADR-002](docs/adr/002-policy-engine.md).
-- **Input Guardrails / DLP** — Regex + ML/NER (no public LLM for DLP); default redact, hard block for high-sensitivity; admin custom patterns; text-only in v1. See [ADR-003](docs/adr/003-input-guardrails-dlp.md).
-- **Routing + Adapters** — Admin-ordered models per purpose; short capped retries; circuit breakers; common adapter interface; mandatory model attribution; stronger agent rate limits; periodic + manual model discovery. See [ADR-004](docs/adr/004-routing-and-adapters.md).
-- **Semantic Cache** — Dedicated Vector DB; in-boundary bge/nomic-class embeddings; cosine ~0.88–0.90; per-prompt cache for DLP-clean content only; TTL + manual + source-doc invalidation. See [ADR-005](docs/adr/005-semantic-cache.md).
-- **Metering & Feedback** — Private-friendly analytical store; **BigQuery** on GCP Phase 1 and **ClickHouse-class** on Private DC; aggregated long-term data; 1–5 star feedback with metadata only; chargeback/showback-ready. See [ADR-006](docs/adr/006-metering-and-feedback.md) and [ADR-009](docs/adr/009-deployment-topology.md).
-- **Observability** — Privacy by default (no raw prompts/responses); OTel + Prometheus + Grafana (+ Loki / Tempo or Jaeger); toggleable per-user metrics; SIEM export; fail-open. See [ADR-007](docs/adr/007-observability.md).
-- **Authentication & SSO** — Google OIDC / OAuth 2.0 for human users in v1; short-lived access + refresh tokens; static role mapping with a path to RBAC; fail-closed unauthenticated traffic; agents deferred as a distinct identity type. See [ADR-008](docs/adr/008-authentication-sso.md).
-- **Deployment Topology & HA** — Phase 1 on Google Cloud (Cloud Run + GKE hybrid); Private DC documented only; BigQuery on GCP / ClickHouse-class on Private DC; single-region HA; same binary across environments; controlled egress. See [ADR-009](docs/adr/009-deployment-topology.md).
-- **Admin Console** — UI-first configuration for Admin role only; no config visibility for non-admins; audited actions; API deferred. See [ADR-010](docs/adr/010-admin-console.md).
+## Architecture Decision Records
 
-Living architecture: [docs/architecture.md](docs/architecture.md).
+All of the following are **Accepted**.
+
+| ADR | Title | Status |
+|-----|-------|--------|
+| [ADR-001](docs/adr/001-conversation-memory-storage.md) | Conversation Memory Storage | Accepted |
+| [ADR-002](docs/adr/002-policy-engine.md) | Policy Engine (OPA) | Accepted |
+| [ADR-003](docs/adr/003-input-guardrails-dlp.md) | Input Guardrails / DLP | Accepted |
+| [ADR-004](docs/adr/004-routing-and-adapters.md) | Routing Engine + Provider Adapters | Accepted |
+| [ADR-005](docs/adr/005-semantic-cache.md) | Semantic Cache | Accepted |
+| [ADR-006](docs/adr/006-metering-and-feedback.md) | Metering & Feedback | Accepted |
+| [ADR-007](docs/adr/007-observability.md) | Observability | Accepted |
+| [ADR-008](docs/adr/008-authentication-sso.md) | Authentication & SSO | Accepted |
+| [ADR-009](docs/adr/009-deployment-topology.md) | Deployment Topology & HA | Accepted |
+| [ADR-010](docs/adr/010-admin-console.md) | Admin Console (UI-first) | Accepted |
+
+The Threat Model lives in [architecture.md §14](docs/architecture.md#14-threat-model). It maps risks to these ADRs and is **not** a separate ADR.
 
 ## Documentation
 
@@ -53,9 +57,11 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
 | [docs/overview.md](docs/overview.md) | Problem statement, vision, KPIs |
 | [docs/requirements.md](docs/requirements.md) | Functional & non-functional requirements |
 | [docs/use-cases.md](docs/use-cases.md) | Personas and scenarios |
-| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through threat model) |
-| [docs/open-questions.md](docs/open-questions.md) | Open product / technical questions |
-| [docs/adr/](docs/adr/) | Architecture Decision Records |
+| [docs/architecture.md](docs/architecture.md) | **Living architecture** (locked through threat model) |
+| [docs/open-questions.md](docs/open-questions.md) | Remaining product / technical questions |
+| [docs/backlog.md](docs/backlog.md) | Deferrals carried into Implementation |
+| [docs/phase-closure/architecture-phase.md](docs/phase-closure/architecture-phase.md) | Architecture phase closure record |
+| [docs/adr/](docs/adr/) | Architecture Decision Records (001–010) |
 | [design/](design/) | Working design notes and diagrams (as they land) |
 
 ## Repository layout
@@ -65,11 +71,14 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
 ├── README.md
 ├── design/                 # Working design artefacts
 └── docs/
-    ├── architecture.md     # Living architecture reference
+    ├── architecture.md
     ├── requirements.md
     ├── overview.md
     ├── use-cases.md
     ├── open-questions.md
+    ├── backlog.md
+    ├── phase-closure/
+    │   └── architecture-phase.md
     ├── assets/
     │   ├── logical-component-diagram.jpg
     │   ├── deployment-topology-overview.jpg

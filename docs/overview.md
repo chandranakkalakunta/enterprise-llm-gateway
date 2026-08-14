@@ -1,5 +1,8 @@
 # Overview
 
+> **Status:** Architecture complete (2026-08-14). Implementation not started.  
+> **Phase 1 deploy:** Google Cloud (customer VPC). Private Data Center is documented, not built.
+
 ## Problem Statement
 
 Enterprises are adopting generative AI at speed, but most rollouts quickly concentrate on one or two public LLM vendors. That concentration is rarely a pure product choice. It is driven by security reviews, compliance and data-residency constraints, cost predictability, procurement lock-in, and the high cost of rewiring applications when a provider changes terms, models, or pricing.

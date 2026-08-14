@@ -1,8 +1,8 @@
 # Enterprise LLM Gateway — Architecture
 
-> **Status:** Architecture phase  
+> **Status:** Architecture **complete** (2026-08-14) — see [phase closure](phase-closure/architecture-phase.md)  
 > **Last updated:** 2026-08-14  
-> **Scope:** This document is the living architecture reference for the dedicated Enterprise LLM Gateway repository. Sections will grow component by component.
+> **Scope:** Living architecture reference. Component design is locked (ADR-001–010 + §14 Threat Model). Implementation has not started.
 
 
 ---
@@ -1419,9 +1419,9 @@ Treat this section as the **backlog seed**, not the test plan:
 
 ---
 
-## 15. Next architecture sections (planned)
+## 15. Architecture checklist and carry-forward
 
-Sections to be added as design deepens:
+Architecture **component design is complete**. Remaining bullets are **Implementation** work (also in [backlog.md](backlog.md)), not open architecture sections.
 
 - [x] Conversation Memory (see §3, ADR-001)
 - [x] Policy Engine (see §4, ADR-002)
@@ -1435,9 +1435,9 @@ Sections to be added as design deepens:
 - [x] Deployment Topology & HA (see §12, ADR-009)
 - [x] Admin Console (see §13, ADR-010)
 - [x] Threat model (see §14)
-- [ ] Request path sequence (happy path + failure modes)
-- [ ] Fine-grained RBAC and Agent / service-account credential issuance (beyond static mapping in §11 and roles in §4.4)
-- [ ] Data model (entities, retention, redaction)
+- [ ] Request path sequence (happy path + failure modes) — *Implementation design note (B9)*
+- [ ] Fine-grained RBAC and Agent / service-account credential issuance — *Implementation / ADR follow-on (B1, B7)*
+- [ ] Data model (entities, retention, redaction) — *Implementation design (B10)*
 
 ---
 
@@ -1448,7 +1448,9 @@ Sections to be added as design deepens:
 | [Overview](overview.md) | Problem, vision, KPIs |
 | [Requirements](requirements.md) | Functional and non-functional requirements |
 | [Use cases](use-cases.md) | Personas and scenarios |
-| [Open questions](open-questions.md) | Unresolved product / tech risks |
+| [Open questions](open-questions.md) | Remaining product / tech risks |
+| [Backlog](backlog.md) | Deferrals carried into Implementation |
+| [Architecture phase closure](phase-closure/architecture-phase.md) | Formal close of Architecture |
 | [Logical component diagram](assets/logical-component-diagram.jpg) | Users, Gateway, internal resources, external LLMs |
 | [High-level topology](assets/deployment-topology-overview.jpg) | GCP Phase 1 vs Private DC |
 | [GCP Phase 1 topology](assets/deployment-topology-gcp-phase1.svg) | Detailed GCP deployment |
