@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 820" width="1280" height="820" role="img" aria-labelledby="title desc">
+  <title id="title">Enterprise LLM Gateway — Google Cloud Phase 1 detailed topology</title>
+  <desc id="desc">Single-region GCP deployment: HTTPS load balancer, Cloud Run plus GKE hybrid compute, Cloud SQL, Memorystore, private Vector DB, BigQuery, Cloud Storage, Secret Manager and Workload Identity, observability in-VPC or managed, and controlled egress via Private Google Access, PSC, and allow-listed NAT.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f1419; }
+      .vpc { fill: #141c28; stroke: #4a90c8; stroke-width: 2; }
+      .zone { fill: #1a2433; stroke: #3d5270; stroke-width: 1.2; }
+      .run { fill: #1d2c44; stroke: #6aa3d4; stroke-width: 1.2; }
+      .gke { fill: #1d2a3a; stroke: #7db0d8; stroke-width: 1.2; }
+      .data { fill: #17261f; stroke: #5aaa7a; stroke-width: 1.2; }
+      .sec { fill: #2a2418; stroke: #c9a227; stroke-width: 1.2; }
+      .obs { fill: #22182a; stroke: #a888c8; stroke-width: 1.2; }
+      .ext { fill: #2a1c1c; stroke: #d08070; stroke-width: 1.2; }
+      .t { font-family: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif; fill: #e8eef5; }
+      .h { font-size: 18px; font-weight: 650; }
+      .s { font-size: 12px; fill: #b7c4d4; }
+      .xs { font-size: 11px; fill: #9aabbd; }
+      .label { font-size: 12.5px; font-weight: 600; fill: #d7e4f2; }
+      .cap { font-size: 11px; fill: #8aa0b8; letter-spacing: 0.05em; }
+      .arrow { stroke: #8eb4d4; stroke-width: 1.4; fill: none; marker-end: url(#ah); }
+      .arrow-hot { stroke: #e08a6a; stroke-width: 1.4; fill: none; marker-end: url(#ah-hot); }
+    </style>
+    <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#8eb4d4"/>
+    </marker>
+    <marker id="ah-hot" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#e08a6a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1280" height="820"/>
+  <text class="t h" x="28" y="34">Google Cloud — Phase 1 detailed topology (single-region HA)</text>
+  <text class="t s" x="28" y="54">Hybrid compute: Cloud Run (stateless) + GKE (sidecars / advanced networking). Same Gateway binary as the future Private DC target.</text>
+
+  <!-- Left: clients + IdP -->
+  <rect class="ext" x="20" y="76" width="176" height="228" rx="8"/>
+  <text class="t cap" x="36" y="98">ENTERPRISE EDGE</text>
+  <rect class="run" x="36" y="114" width="144" height="40" rx="4"/>
+  <text class="t label" x="48" y="139">Users / IDEs / apps</text>
+  <rect class="sec" x="36" y="164" width="144" height="40" rx="4"/>
+  <text class="t label" x="48" y="189">Google IdP (OIDC)</text>
+  <rect class="ext" x="36" y="214" width="144" height="70" rx="4"/>
+  <text class="t label" x="48" y="240">No anonymous path</text>
+  <text class="t xs" x="48" y="258">Fail-closed at the edge</text>
+  <text class="t xs" x="48" y="274">and in the Gateway</text>
+
+  <line class="arrow" x1="196" y1="134" x2="230" y2="134"/>
+
+  <!-- VPC -->
+  <rect class="vpc" x="228" y="76" width="800" height="668" rx="10"/>
+  <text class="t cap" x="248" y="98">CUSTOMER VPC  ·  SINGLE REGION  ·  MULTI-AZ</text>
+
+  <!-- Ingress -->
+  <rect class="sec" x="248" y="114" width="760" height="56" rx="6"/>
+  <text class="t label" x="264" y="136">Regional HTTPS Application Load Balancer  +  identity-aware / allow-listed ingress</text>
+  <text class="t xs" x="264" y="156">TLS terminated in-boundary. Unauthenticated requests rejected. Streaming pass-through to the data plane.</text>
+
+  <!-- Compute row -->
+  <rect class="run" x="248" y="188" width="360" height="188" rx="6"/>
+  <text class="t cap" x="264" y="210">CLOUD RUN  ·  STATELESS / SUITABLE SERVICES</text>
+  <rect class="run" x="264" y="224" width="152" height="44" rx="4"/>
+  <text class="t label" x="276" y="251">Admin API</text>
+  <rect class="run" x="428" y="224" width="160" height="44" rx="4"/>
+  <text class="t label" x="440" y="251">Metering writers</text>
+  <rect class="run" x="264" y="280" width="152" height="44" rx="4"/>
+  <text class="t label" x="276" y="307">Config publish</text>
+  <rect class="run" x="428" y="280" width="160" height="44" rx="4"/>
+  <text class="t label" x="440" y="307">Async workers</text>
+  <text class="t xs" x="264" y="346">May later move to GKE if sidecars or</text>
+  <text class="t xs" x="264" y="362">networking needs grow.</text>
+
+  <rect class="gke" x="624" y="188" width="384" height="188" rx="6"/>
+  <text class="t cap" x="640" y="210">GKE  ·  SIDECARS / ADVANCED NETWORKING</text>
+  <rect class="gke" x="640" y="224" width="168" height="44" rx="4"/>
+  <text class="t label" x="652" y="251">Data plane / proxy</text>
+  <rect class="gke" x="820" y="224" width="168" height="44" rx="4"/>
+  <text class="t label" x="832" y="251">OPA sidecar</text>
+  <rect class="gke" x="640" y="280" width="168" height="44" rx="4"/>
+  <text class="t label" x="652" y="307">DLP + embeddings</text>
+  <rect class="gke" x="820" y="280" width="168" height="44" rx="4"/>
+  <text class="t label" x="832" y="307">Adapters (stream)</text>
+  <text class="t xs" x="640" y="346">Regional cluster. OPA, local NER, and</text>
+  <text class="t xs" x="640" y="362">in-boundary embedding models live here.</text>
+
+  <line class="arrow" x1="628" y1="142" x2="428" y2="188"/>
+  <line class="arrow" x1="720" y1="170" x2="780" y2="188"/>
+
+  <!-- Data plane -->
+  <rect class="data" x="248" y="396" width="760" height="148" rx="6"/>
+  <text class="t cap" x="264" y="418">STATEFUL  ·  MANAGED, PRIVATE, HA IN-REGION</text>
+  <rect class="data" x="264" y="432" width="170" height="52" rx="4"/>
+  <text class="t label" x="276" y="454">Cloud SQL</text>
+  <text class="t xs" x="276" y="472">PostgreSQL HA</text>
+  <rect class="data" x="446" y="432" width="170" height="52" rx="4"/>
+  <text class="t label" x="458" y="454">Memorystore</text>
+  <text class="t xs" x="458" y="472">Redis HA</text>
+  <rect class="data" x="628" y="432" width="170" height="52" rx="4"/>
+  <text class="t label" x="640" y="454">Vector DB</text>
+  <text class="t xs" x="640" y="472">private-friendly</text>
+  <rect class="data" x="810" y="432" width="178" height="52" rx="4"/>
+  <text class="t label" x="822" y="454">Cloud Storage</text>
+  <text class="t xs" x="822" y="472">attachments</text>
+  <rect class="data" x="264" y="496" width="352" height="32" rx="4"/>
+  <text class="t xs" x="276" y="516">Conversation memory: Redis hot + Cloud SQL durable (ADR-001)</text>
+  <rect class="data" x="628" y="496" width="360" height="32" rx="4"/>
+  <text class="t xs" x="640" y="516">Semantic cache vectors stay in-boundary (ADR-005)</text>
+
+  <!-- Security + analytics + obs -->
+  <rect class="sec" x="248" y="564" width="244" height="160" rx="6"/>
+  <text class="t cap" x="264" y="586">SECRETS + IDENTITY</text>
+  <rect class="sec" x="264" y="600" width="212" height="40" rx="4"/>
+  <text class="t label" x="276" y="625">Secret Manager</text>
+  <rect class="sec" x="264" y="650" width="212" height="40" rx="4"/>
+  <text class="t label" x="276" y="675">Workload Identity</text>
+  <text class="t xs" x="264" y="708">No long-lived keys on disk.</text>
+
+  <rect class="data" x="508" y="564" width="244" height="160" rx="6"/>
+  <text class="t cap" x="524" y="586">ANALYTICS (GCP)</text>
+  <rect class="data" x="524" y="600" width="212" height="52" rx="4"/>
+  <text class="t label" x="536" y="622">BigQuery</text>
+  <text class="t xs" x="536" y="640">metering aggregates</text>
+  <text class="t xs" x="524" y="672">Interface stays the same;</text>
+  <text class="t xs" x="524" y="688">Private DC uses ClickHouse</text>
+  <text class="t xs" x="524" y="704">(or equivalent).</text>
+
+  <rect class="obs" x="768" y="564" width="240" height="160" rx="6"/>
+  <text class="t cap" x="784" y="586">OBSERVABILITY</text>
+  <text class="t label" x="784" y="616">Prometheus / Grafana</text>
+  <text class="t label" x="784" y="636">Loki + Tempo  (or)</text>
+  <text class="t label" x="784" y="656">Google managed equiv.</text>
+  <text class="t xs" x="784" y="684">Fail-open telemetry</text>
+  <text class="t xs" x="784" y="700">SIEM export (ADR-007)</text>
+
+  <!-- Right: egress -->
+  <rect class="ext" x="1048" y="76" width="212" height="668" rx="8"/>
+  <text class="t cap" x="1064" y="98">CONTROLLED EGRESS</text>
+  <rect class="sec" x="1064" y="114" width="180" height="72" rx="4"/>
+  <text class="t label" x="1076" y="138">Private Google</text>
+  <text class="t label" x="1076" y="156">Access / PSC</text>
+  <text class="t xs" x="1076" y="174">+ explicit allow-lists</text>
+  <rect class="ext" x="1064" y="204" width="180" height="56" rx="4"/>
+  <text class="t label" x="1076" y="228">Cloud NAT</text>
+  <text class="t xs" x="1076" y="246">allow-listed only</text>
+  <rect class="ext" x="1064" y="280" width="180" height="72" rx="4"/>
+  <text class="t label" x="1076" y="304">Public LLM APIs</text>
+  <text class="t xs" x="1076" y="322">only after Policy +</text>
+  <text class="t xs" x="1076" y="338">DLP allow egress</text>
+  <rect class="data" x="1064" y="372" width="180" height="72" rx="4"/>
+  <text class="t label" x="1076" y="396">Internal LLM / RAG</text>
+  <text class="t xs" x="1076" y="414">private IP / PSC /</text>
+  <text class="t xs" x="1076" y="430">in-VPC peers</text>
+  <rect class="obs" x="1064" y="464" width="180" height="72" rx="4"/>
+  <text class="t label" x="1076" y="488">Customer SIEM</text>
+  <text class="t xs" x="1076" y="506">structured export</text>
+  <text class="t xs" x="1076" y="522">metadata only</text>
+  <text class="t xs" x="1064" y="564">Default deny. Fail-closed</text>
+  <text class="t xs" x="1064" y="580">on Policy/DLP/auth</text>
+  <text class="t xs" x="1064" y="596">failure. No open 0.0.0.0</text>
+  <text class="t xs" x="1064" y="612">egress from workloads.</text>
+  <text class="t xs" x="1064" y="640">Multi-region HA is not</text>
+  <text class="t xs" x="1064" y="656">Phase 1. Design stays</text>
+  <text class="t xs" x="1064" y="672">portable for later.</text>
+
+  <line class="arrow-hot" x1="1028" y1="280" x2="1048" y2="310"/>
+  <line class="arrow" x1="1028" y1="226" x2="1048" y2="400"/>
+</svg>

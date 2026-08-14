@@ -22,7 +22,7 @@ The Enterprise LLM Gateway is a **customer-controlled control plane** between en
 | Internal RAG engine | First-class destination for internal knowledge |
 | Observability / SIEM | Metrics, logs, traces, alerts |
 
-**Trust boundary (preferred deployment):** the gateway, policy store, semantic cache, conversation memory stores, internal LLMs, and internal RAG sit **inside the corporate firewall / private VPC**. Public providers are reached only via controlled egress when policy allows.
+**Trust boundary (preferred deployment):** the gateway, policy store, semantic cache, conversation memory stores, internal LLMs, and internal RAG sit **inside the corporate firewall / private VPC**. Public providers are reached only via controlled egress when policy allows. **Phase 1 implementation is Google Cloud** in a customer VPC; Private Data Center is a documented future target (see §12).
 
 **Design principles for the boundary:**
 
@@ -680,7 +680,7 @@ It does **not** own Conversation Memory content, DLP pattern packs, or the immut
 
 | Decision | Choice |
 |----------|--------|
-| Long-term store | Analytical DB/warehouse preferably **inside** (or tightly peered with) the customer VPC; **ClickHouse** is a strong candidate |
+| Long-term store | Analytical DB/warehouse preferably **inside** (or tightly peered with) the customer VPC. **BigQuery** on GCP Phase 1; **ClickHouse** (or equivalent) on Private DC (see §12) |
 | External SaaS warehouse | Only **clean aggregates**, and only with **explicit customer opt-in** |
 | Long-term grain | Prefer **aggregates**; avoid permanent full per-request retention |
 | Hot path | Finer-grained short-term counters for dashboards and rate limiting |
@@ -695,10 +695,10 @@ It does **not** own Conversation Memory content, DLP pattern packs, or the immut
 | Tier | Role | Placement posture |
 |------|------|-------------------|
 | **Hot counters** | Near-real-time rates, quota enforcement inputs, ops “now” views | In-VPC with the control/data plane (e.g. Redis or equivalent) |
-| **Analytical store** | Long-term aggregates, historical dashboards, chargeback exports | Prefer **private** or **privately connected** analytical DB; ClickHouse-class systems fit high-ingest aggregation |
+| **Analytical store** | Long-term aggregates, historical dashboards, chargeback exports | **BigQuery** on GCP Phase 1; **ClickHouse** (or equivalent) on Private DC. Same metering interface (see §12 / ADR-009) |
 | **Opt-in external warehouse** | Customer BI stack receiving **pre-aggregated, clean** tables only | Never the default path for raw or near-raw traffic |
 
-Private-first does not mean “no BI tools.” It means **raw and sensitive traffic stays governed**, and long-term analytics prefer customer-controlled analytical capacity over shipping every event to a multi-tenant SaaS by default.
+Private-first does not mean “no BI tools.” It means **raw and sensitive traffic stays governed**, and long-term analytics prefer customer-controlled analytical capacity over shipping every event to a multi-tenant SaaS by default. On **GCP Phase 1**, that store is **BigQuery**; the ClickHouse-class option remains the **Private DC** mapping (ADR-009). The async metadata event shape does not change.
 
 ### 9.4 Aggregation strategy
 
@@ -1095,7 +1095,180 @@ See **[ADR-008: Authentication & SSO](adr/008-authentication-sso.md)** for the d
 
 ---
 
-## 12. Next architecture sections (planned)
+## 12. Deployment Topology & High Availability
+
+> These decisions are **locked** for the initial architecture. Changes require a new ADR that supersedes [ADR-009](adr/009-deployment-topology.md).
+
+Phase 1 **implements on Google Cloud only**. Private Data Center is a **documented** future target so the binary and config model stay portable — it is **not** built in this phase.
+
+### 12.1 Responsibility and goals
+
+Deployment topology defines **where each component runs**, **how it stays highly available**, and **how traffic crosses the trust boundary**.
+
+It owns:
+
+- Environment mapping (GCP Phase 1 vs future Private DC)
+- Compute placement (Cloud Run vs GKE) and the rule for moving a service later
+- Stateful service choices and their HA class
+- Secrets, identity of workloads, attachments, and analytical-store mapping
+- Controlled egress and single-region HA posture
+
+It does **not** change the request path in §11.9. Auth is still first; Policy and DLP still fail-closed for egress; observability still fails open.
+
+**Goals:**
+
+- Cost-conscious start on managed GCP services
+- **Same Gateway binary and configuration model** on GCP and a future Private DC
+- Single-region HA that does **not** block a later multi-region design
+- No default-open path from workloads to the public internet
+
+### 12.2 Key locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| Phase 1 target | **Google Cloud only** |
+| Private Data Center | Recommended architecture **documented only**; not implemented in Phase 1 |
+| Compute | **Hybrid:** Cloud Run (suitable stateless) + **GKE** (sidecars / advanced networking) |
+| Durable SQL (GCP) | **Cloud SQL PostgreSQL (HA)** |
+| Hot cache / memory (GCP) | **Memorystore Redis (HA)** |
+| Vector store | **Private-friendly dedicated Vector DB** (SKU is implementation; in-boundary is mandatory) |
+| Analytics | **BigQuery** on GCP; **ClickHouse** (or equivalent) on Private DC |
+| Attachments | **Cloud Storage** (GCP); S3-compatible object store on Private DC |
+| Secrets | **Secret Manager** + **Workload Identity** |
+| Observability | OSS in-VPC (Prometheus / Grafana / Loki / Tempo) **or** Google managed equivalent |
+| Egress | **Controlled only** — Private Google Access / PSC / explicit allow-lists |
+| Unauthenticated traffic | **Fail-closed** |
+| HA (v1) | **Single-region** (multi-AZ). Multi-region left open |
+| Application model | **Same binary + config schema** across environments |
+
+### 12.3 Diagrams
+
+Multi-level views live as image assets in this repository:
+
+| View | Asset |
+|------|--------|
+| High-level topology (trust boundary, request path, destinations) | [docs/assets/deployment-topology-overview.svg](assets/deployment-topology-overview.svg) |
+| Detailed GCP Phase 1 (compute, stateful, secrets, egress) | [docs/assets/deployment-topology-gcp-phase1.svg](assets/deployment-topology-gcp-phase1.svg) |
+
+![High-level deployment topology](assets/deployment-topology-overview.svg)
+
+![Google Cloud Phase 1 detailed topology](assets/deployment-topology-gcp-phase1.svg)
+
+### 12.4 Google Cloud (Phase 1) topology
+
+Everything below runs in a **customer-owned GCP project / VPC**, single region, multiple zones.
+
+**Ingress.** A regional HTTPS Application Load Balancer terminates TLS in-boundary. Backends are private. There is **no anonymous data-plane path** — missing or invalid identity is rejected at the Gateway (ADR-008), and the edge must not offer a public “open proxy.”
+
+**Hybrid compute.**
+
+| Platform | Initial placement (indicative) | Why |
+|----------|--------------------------------|-----|
+| **GKE** (regional cluster) | Streaming data plane / proxy, **OPA sidecar**, DLP + local NER, in-boundary embedding workers, provider adapters | Sidecars, local models, network policy, long-lived streams |
+| **Cloud Run** | Admin API, policy/config publish, async metering writers, other stateless workers | Lower ops and cost for request/response services that do not need sidecars |
+
+First placement is **not sacred**. If a Cloud Run service needs a sidecar, custom CNI, or tighter mesh policy, **move it to GKE**. One image, one pipeline — only the runtime changes.
+
+**Stateful (managed, private, HA in-region).**
+
+| Need | GCP service |
+|------|-------------|
+| Durable conversation history, admin / policy metadata | **Cloud SQL PostgreSQL (HA)** |
+| Hot conversation working set, short-TTL counters | **Memorystore Redis (HA)** |
+| Semantic-cache vectors | **Private-friendly Vector DB** (dedicated; private IP / PSC) |
+| Attachments | **Cloud Storage** (CMEK expected on the customer project) |
+| Metering / analytics aggregates | **BigQuery** |
+
+**Identity of workloads and secrets.** Runtime service accounts use **Workload Identity**. Provider API keys, OIDC client secrets, and RAG credentials live in **Secret Manager**. No long-lived JSON keys on disk; no secrets in the Gateway image.
+
+**Observability.** Run the ADR-007 stack **in the VPC** (Prometheus, Grafana, Loki, Tempo) **or** the Google managed equivalent (Managed Prometheus, Cloud Logging, Cloud Trace) if privacy (no raw prompts) and **fail-open** still hold. SIEM export stays structured metadata.
+
+**Networking / egress.**
+
+```text
+Client ──TLS──► Regional HTTPS LB ──► Gateway (authn first)
+                                          │
+                    allow + DLP clean ────┤
+                                          ▼
+                         Cloud NAT / PSC / PGA
+                         (explicit allow-list only)
+                                          │
+                    public LLM APIs   internal LLM / RAG
+                    (fail-closed if       (private IP)
+                     Policy/DLP deny)
+```
+
+Workloads must not have 0.0.0.0/0 egress. Private Google Access and Private Service Connect cover Google APIs and private peers. Public providers are reached only through an **allow-listed** path after Policy and DLP permit egress.
+
+### 12.5 Private Data Center (future)
+
+Documented so Phase 1 does not hard-wire GCP SDKs into the application core. **Not implemented in Phase 1.**
+
+| Concern | Private DC analogue |
+|---------|---------------------|
+| Compute | Kubernetes (optional scale-to-zero later) |
+| PostgreSQL HA | In-boundary HA (CloudNativePG / Patroni or equivalent) |
+| Redis HA | In-boundary Redis HA |
+| Vector DB | Same class, in-boundary |
+| Analytics | **ClickHouse** (or equivalent) |
+| Object storage | S3-compatible |
+| Secrets | Customer secret store + workload identity (Vault or equivalent) |
+| Egress | Explicit proxy / firewall allow-lists |
+
+Same request path, same fail-closed rules, same binary.
+
+### 12.6 High availability
+
+| Scope | v1 stance |
+|-------|-----------|
+| Region | **Single region**, multiple zones |
+| Compute | Regional GKE; Cloud Run regional; min instances where cold-start would break streaming SLOs |
+| Data | Cloud SQL HA, Memorystore HA, multi-AZ object storage |
+| Analytics | BigQuery; not on the request deny path (ADR-006) |
+| Failover | Zone loss is in scope. Region loss is **not** a v1 RTO target |
+| Later | Multi-region / active-active is an extension. Keep policy snapshots, principal ids, and cache keys **location-agnostic** so that work is not a rewrite |
+
+Do not encode “this region is the only region” into application logic. Do not ship dual-write multi-region in v1 either.
+
+### 12.7 Shared binary and configuration
+
+- **One Gateway container image** (and the same config schema) for GCP and a future Private DC.
+- Environment files / Secret Manager / future Vault supply **values**: DSN, Redis URL, vector endpoint, warehouse adapter (`bigquery` \| `clickhouse`), IdP, allow-lists.
+- Warehouse and secret-store access go through **narrow adapters**. Business logic talks to the metering and secret **interfaces**, not to a GCP client scattered through the data plane.
+- Feature flags and policy snapshots are data, not forks of the binary.
+
+### 12.8 Controlled egress and the trust boundary
+
+| Rule | Enforcement |
+|------|-------------|
+| Unauthenticated request | **Reject** — no Policy, no provider call (ADR-008) |
+| Policy deny or Policy failure on external route | **No egress** (ADR-002) |
+| DLP block or DLP failure on external route | **No egress** (ADR-003) |
+| Destination not on allow-list | Network **deny** even if a bug tries to dial |
+| Internal LLM / RAG | Private path; not hairpinned through the public internet |
+| Telemetry backend down | **Fail-open** (ADR-007) — do not take the data plane down |
+
+The Gateway remains the **policy source of truth**. Network controls are a second line, not a substitute for OPA and DLP.
+
+### 12.9 Mapping to locked components
+
+| Component | Phase 1 home |
+|-----------|----------------|
+| Authn / SSO (§11) | Edge + data plane on GKE; Google OIDC |
+| Policy / OPA (§4) | GKE sidecar (or in-process); snapshots from Cloud SQL / object versioning |
+| DLP (§5) | GKE, in-boundary models |
+| Semantic cache (§8) | Private Vector DB + GKE embedders; fail-open on cache |
+| Routing + adapters (§6–7) | GKE |
+| Conversation memory (§3) | Memorystore + Cloud SQL + Cloud Storage |
+| Metering (§9) | Cloud Run writers → **BigQuery** (ClickHouse later) |
+| Observability (§10) | In-VPC OSS or Google managed equivalent |
+| Admin API / Console | Cloud Run + same Google SSO |
+
+See **[ADR-009: Deployment Topology & High Availability](adr/009-deployment-topology.md)** for the decision record.
+
+---
+
+## 13. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
@@ -1108,10 +1281,10 @@ Sections to be added as design deepens:
 - [x] Metering & Feedback (see §9, ADR-006)
 - [x] Observability (see §10, ADR-007)
 - [x] Authentication & SSO (see §11, ADR-008)
+- [x] Deployment Topology & HA (see §12, ADR-009)
 - [ ] Request path sequence (happy path + failure modes)
 - [ ] Fine-grained RBAC and Agent / service-account credential issuance (beyond static mapping in §11 and roles in §4.4)
 - [ ] Data model (entities, retention, redaction)
-- [ ] Deployment topology (VPC, HA, secrets)
 - [ ] Threat model and trust-boundary diagrams
 
 ---
@@ -1124,6 +1297,8 @@ Sections to be added as design deepens:
 | [Requirements](requirements.md) | Functional and non-functional requirements |
 | [Use cases](use-cases.md) | Personas and scenarios |
 | [Open questions](open-questions.md) | Unresolved product / tech risks |
+| [High-level topology](assets/deployment-topology-overview.svg) | Overview deployment diagram |
+| [GCP Phase 1 topology](assets/deployment-topology-gcp-phase1.svg) | Detailed GCP diagram |
 | [ADR-001](adr/001-conversation-memory-storage.md) | Locked memory storage decision |
 | [ADR-002](adr/002-policy-engine.md) | Locked Policy Engine (OPA) decision |
 | [ADR-003](adr/003-input-guardrails-dlp.md) | Locked Input Guardrails / DLP decision |
@@ -1132,3 +1307,4 @@ Sections to be added as design deepens:
 | [ADR-006](adr/006-metering-and-feedback.md) | Locked Metering & Feedback decision |
 | [ADR-007](adr/007-observability.md) | Locked Observability decision |
 | [ADR-008](adr/008-authentication-sso.md) | Locked Authentication & SSO decision |
+| [ADR-009](adr/009-deployment-topology.md) | Locked Deployment Topology & HA decision |

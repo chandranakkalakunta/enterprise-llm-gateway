@@ -27,7 +27,7 @@ Constraints that shape the decision:
 
 | Concern | Choice |
 |---------|--------|
-| Long-term store | **Analytical database / warehouse** that preferably runs **inside** (or tightly peered with) the customer VPC. **ClickHouse** is a strong candidate. |
+| Long-term store | **Analytical database / warehouse** that preferably runs **inside** (or tightly peered with) the customer VPC. Environment mapping (ADR-009): **BigQuery** on GCP Phase 1; **ClickHouse** (or equivalent) on Private DC. |
 | External SaaS warehouse | Only for **clean aggregates**, and only when the customer **explicitly opts in** |
 | Long-term granularity | Prefer **aggregated** data; avoid permanent retention of every individual request |
 | Hot / short-term | Finer-grained counters for live dashboards and **rate limiting** (separate from long-term warehouse grain) |
@@ -60,7 +60,7 @@ Constraints that shape the decision:
 - Requires a deliberate **aggregation pipeline** (correct windows, late events, idempotency).
 - Private analytical store adds **operational** surface (capacity, backups, access control).
 - Losing permanent per-request rows limits some forensic “what exactly was asked?” workflows — by design; those belong to policy-governed audit/retention paths, not default metering.
-- Exact ClickHouse vs peer product choice may still be validated in implementation; the **private-friendly analytical store + aggregate grain** principles are locked.
+- Exact warehouse engine is environment-mapped in [ADR-009](009-deployment-topology.md) (BigQuery on GCP; ClickHouse-class on Private DC). The **private-friendly analytical store + aggregate grain** principles remain locked here.
 
 ### Neutral
 
@@ -83,3 +83,4 @@ Constraints that shape the decision:
 - Requirements: F9, F10; analytics & logging requirements
 - [ADR-004: Routing and Adapters](004-routing-and-adapters.md) — model attribution fields
 - [ADR-005: Semantic Cache](005-semantic-cache.md) — cache_hit signals
+- [ADR-009: Deployment Topology](009-deployment-topology.md) — BigQuery vs ClickHouse environment mapping

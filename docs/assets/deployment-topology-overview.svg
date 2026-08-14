@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 640" width="1180" height="640" role="img" aria-labelledby="title desc">
+  <title id="title">Enterprise LLM Gateway — high-level deployment topology</title>
+  <desc id="desc">Clients enter a customer-controlled trust boundary. Authn is first. The Gateway, policy, DLP, cache, routing, memory, metering, and admin sit inside. Public LLMs are reached only via controlled egress. Internal LLMs and RAG stay in-boundary.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f1419; }
+      .panel { fill: #1a2330; stroke: #3d5270; stroke-width: 1.5; }
+      .trust { fill: #152033; stroke: #4a90c8; stroke-width: 2; }
+      .box { fill: #243044; stroke: #6aa3d4; stroke-width: 1.2; }
+      .box-alt { fill: #1e2c22; stroke: #5aaa7a; stroke-width: 1.2; }
+      .box-warn { fill: #2a2418; stroke: #c9a227; stroke-width: 1.2; }
+      .box-ext { fill: #2a1c1c; stroke: #d08070; stroke-width: 1.2; }
+      .t { font-family: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif; fill: #e8eef5; }
+      .h { font-size: 18px; font-weight: 650; }
+      .s { font-size: 12px; fill: #b7c4d4; }
+      .xs { font-size: 11px; fill: #9aabbd; }
+      .label { font-size: 13px; font-weight: 600; fill: #d7e4f2; }
+      .cap { font-size: 11px; fill: #8aa0b8; letter-spacing: 0.04em; }
+      .arrow { stroke: #8eb4d4; stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+      .arrow-hot { stroke: #e08a6a; stroke-width: 1.6; fill: none; marker-end: url(#ah-hot); stroke-dasharray: 5 3; }
+    </style>
+    <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#8eb4d4"/>
+    </marker>
+    <marker id="ah-hot" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#e08a6a"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1180" height="640"/>
+  <text class="t h" x="32" y="36">Enterprise LLM Gateway — High-level topology</text>
+  <text class="t s" x="32" y="56">Same application binary and configuration model on GCP (Phase 1) and future Private DC. Authn first; fail-closed if unauthenticated.</text>
+
+  <!-- Clients -->
+  <rect class="panel" x="24" y="84" width="170" height="472" rx="8"/>
+  <text class="t cap" x="40" y="108">CLIENTS</text>
+  <rect class="box" x="40" y="124" width="138" height="44" rx="5"/>
+  <text class="t label" x="56" y="151">IDE / Chat</text>
+  <rect class="box" x="40" y="180" width="138" height="44" rx="5"/>
+  <text class="t label" x="56" y="207">Internal apps</text>
+  <rect class="box" x="40" y="236" width="138" height="44" rx="5"/>
+  <text class="t label" x="56" y="263">Admin console</text>
+  <rect class="box-warn" x="40" y="292" width="138" height="56" rx="5"/>
+  <text class="t label" x="56" y="316">Agents</text>
+  <text class="t xs" x="56" y="334">Future identity type</text>
+  <text class="t xs" x="40" y="380">Human users: Google</text>
+  <text class="t xs" x="40" y="396">OIDC / OAuth 2.0 (v1)</text>
+  <text class="t xs" x="40" y="420">Unauthenticated →</text>
+  <text class="t xs" x="40" y="436">reject all</text>
+
+  <line class="arrow" x1="194" y1="202" x2="248" y2="202"/>
+
+  <!-- Trust boundary -->
+  <rect class="trust" x="248" y="84" width="620" height="472" rx="10"/>
+  <text class="t cap" x="268" y="108">CUSTOMER TRUST BOUNDARY  ·  VPC / PRIVATE DC</text>
+  <text class="t xs" x="268" y="126">Phase 1 = Google Cloud only. Private DC is the documented future target, not implemented in Phase 1.</text>
+
+  <rect class="box-warn" x="268" y="144" width="580" height="40" rx="5"/>
+  <text class="t label" x="284" y="169">1. Authn / SSO  →  internal request context  (fail-closed)</text>
+
+  <rect class="box" x="268" y="200" width="108" height="52" rx="5"/>
+  <text class="t label" x="280" y="222">API /</text>
+  <text class="t label" x="280" y="240">Data plane</text>
+  <rect class="box" x="388" y="200" width="100" height="52" rx="5"/>
+  <text class="t label" x="404" y="231">Policy</text>
+  <rect class="box" x="500" y="200" width="100" height="52" rx="5"/>
+  <text class="t label" x="524" y="231">DLP</text>
+  <rect class="box" x="612" y="200" width="100" height="52" rx="5"/>
+  <text class="t label" x="632" y="231">Cache</text>
+  <rect class="box" x="724" y="200" width="124" height="52" rx="5"/>
+  <text class="t label" x="740" y="231">Route + adapters</text>
+
+  <line class="arrow" x1="376" y1="226" x2="388" y2="226"/>
+  <line class="arrow" x1="488" y1="226" x2="500" y2="226"/>
+  <line class="arrow" x1="600" y1="226" x2="612" y2="226"/>
+  <line class="arrow" x1="712" y1="226" x2="724" y2="226"/>
+
+  <rect class="box-alt" x="268" y="276" width="180" height="64" rx="5"/>
+  <text class="t label" x="284" y="302">Conversation memory</text>
+  <text class="t xs" x="284" y="320">Postgres + Redis + objects</text>
+  <rect class="box-alt" x="462" y="276" width="180" height="64" rx="5"/>
+  <text class="t label" x="478" y="302">Metering + analytics</text>
+  <text class="t xs" x="478" y="320">BQ (GCP) / CH (Private DC)</text>
+  <rect class="box-alt" x="656" y="276" width="192" height="64" rx="5"/>
+  <text class="t label" x="672" y="302">Audit + observability</text>
+  <text class="t xs" x="672" y="320">OSS in-VPC or managed equiv.</text>
+
+  <rect class="box" x="268" y="360" width="580" height="52" rx="5"/>
+  <text class="t label" x="284" y="382">Same Gateway binary + configuration model</text>
+  <text class="t xs" x="284" y="400">Environment-specific values only (endpoints, secrets, IdP, feature flags)</text>
+
+  <rect class="box-warn" x="268" y="428" width="580" height="108" rx="5"/>
+  <text class="t label" x="284" y="454">HA target (v1): single-region high availability</text>
+  <text class="t xs" x="284" y="474">Multi-AZ managed data services; regional compute. Stronger multi-region HA is an extension, not a v1 requirement.</text>
+  <text class="t xs" x="284" y="494">Secrets: customer secret store (Secret Manager on GCP). Attachments: object storage.</text>
+  <text class="t xs" x="284" y="514">Controlled egress only — no open path to the public internet.</text>
+
+  <line class="arrow" x1="868" y1="226" x2="918" y2="170"/>
+  <line class="arrow" x1="868" y1="226" x2="918" y2="360"/>
+
+  <!-- Destinations -->
+  <rect class="box-ext" x="918" y="84" width="238" height="200" rx="8"/>
+  <text class="t cap" x="934" y="108">OUTSIDE  ·  CONTROLLED EGRESS</text>
+  <rect class="box-ext" x="934" y="124" width="206" height="48" rx="5"/>
+  <text class="t label" x="950" y="153">Public LLMs</text>
+  <text class="t xs" x="934" y="192">Claude · Grok · Gemini · OpenAI …</text>
+  <text class="t xs" x="934" y="210">PSC / PGA / allow-listed NAT</text>
+  <text class="t xs" x="934" y="228">Policy + DLP fail-closed</text>
+  <text class="t xs" x="934" y="258">Google IdP (OIDC) for humans</text>
+
+  <rect class="box-alt" x="918" y="304" width="238" height="252" rx="8"/>
+  <text class="t cap" x="934" y="328">IN-BOUNDARY DESTINATIONS</text>
+  <rect class="box-alt" x="934" y="344" width="206" height="48" rx="5"/>
+  <text class="t label" x="950" y="373">Internal LLMs</text>
+  <rect class="box-alt" x="934" y="404" width="206" height="48" rx="5"/>
+  <text class="t label" x="950" y="433">Internal RAG</text>
+  <text class="t xs" x="934" y="476">First-class peers to public</text>
+  <text class="t xs" x="934" y="492">models. Prefer private paths;</text>
+  <text class="t xs" x="934" y="508">no public hop required.</text>
+</svg>

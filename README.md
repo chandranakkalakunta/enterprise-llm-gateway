@@ -41,6 +41,7 @@ This repository has moved out of general **ideation** into a **dedicated archite
 - **Metering & Feedback** — Private-friendly analytical store (ClickHouse strong candidate); aggregated long-term data; 1–5 star feedback with metadata only; chargeback/showback-ready. See [ADR-006](docs/adr/006-metering-and-feedback.md).
 - **Observability** — Privacy by default (no raw prompts/responses); OTel + Prometheus + Grafana (+ Loki / Tempo or Jaeger); toggleable per-user metrics; SIEM export; fail-open. See [ADR-007](docs/adr/007-observability.md).
 - **Authentication & SSO** — Google OIDC / OAuth 2.0 for human users in v1; short-lived access + refresh tokens; static role mapping with a path to RBAC; fail-closed unauthenticated traffic; agents deferred as a distinct identity type. See [ADR-008](docs/adr/008-authentication-sso.md).
+- **Deployment Topology & HA** — Phase 1 on Google Cloud (Cloud Run + GKE hybrid); Private DC documented only; BigQuery on GCP / ClickHouse-class on Private DC; single-region HA; same binary across environments; controlled egress. See [ADR-009](docs/adr/009-deployment-topology.md).
 
 Living architecture: [docs/architecture.md](docs/architecture.md).
 
@@ -51,7 +52,7 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
 | [docs/overview.md](docs/overview.md) | Problem statement, vision, KPIs |
 | [docs/requirements.md](docs/requirements.md) | Functional & non-functional requirements |
 | [docs/use-cases.md](docs/use-cases.md) | Personas and scenarios |
-| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through authentication & SSO) |
+| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through deployment topology & HA) |
 | [docs/open-questions.md](docs/open-questions.md) | Open product / technical questions |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 | [design/](design/) | Working design notes and diagrams (as they land) |
@@ -68,7 +69,7 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
     ├── overview.md
     ├── use-cases.md
     ├── open-questions.md
-    ├── assets/             # Diagrams and images
+    ├── assets/             # Diagrams (high-level + GCP Phase 1 topology)
     └── adr/
         ├── 001-conversation-memory-storage.md
         ├── 002-policy-engine.md
@@ -77,7 +78,8 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
         ├── 005-semantic-cache.md
         ├── 006-metering-and-feedback.md
         ├── 007-observability.md
-        └── 008-authentication-sso.md
+        ├── 008-authentication-sso.md
+        └── 009-deployment-topology.md
 ```
 
 ## One-sentence summary

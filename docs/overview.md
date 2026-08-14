@@ -29,7 +29,7 @@ When the **Enterprise LLM Gateway** is successful:
 - Usage is metered and analysed in a **privacy-respecting** way (aggregate, purpose-based, role-based — not surveillance of free-form prompts by default).
 - Optional **1–5 star user feedback** on responses is collected and fed into analytics so routing quality improves over time (ratings link to request metadata, not raw prompts by default).
 - The gateway adds **minimal latency**, supports **full streaming**, and does not become a throughput bottleneck.
-- Preferred deployment is **inside the corporate firewall / private VPC**; a dedicated private cloud instance is acceptable. Pure multi-tenant public SaaS is not the primary offer.
+- Preferred deployment is **inside the corporate firewall / private VPC**; a dedicated private cloud instance is acceptable. Pure multi-tenant public SaaS is not the primary offer. **Phase 1 implements on Google Cloud** (customer VPC). Private Data Center is a documented future target, not a Phase 1 build.
 
 ## How this differs from typical public LLM gateways
 
