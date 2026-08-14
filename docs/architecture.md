@@ -1,7 +1,7 @@
 # Enterprise LLM Gateway — Architecture
 
 > **Status:** Architecture phase  
-> **Last updated:** 2026-08-03  
+> **Last updated:** 2026-08-14  
 > **Scope:** This document is the living architecture reference for the dedicated Enterprise LLM Gateway repository. Sections will grow component by component.
 
 
@@ -16,7 +16,7 @@ The Enterprise LLM Gateway is a **customer-controlled control plane** between en
 | Normal AI User | Follows corporate policy |
 | Super AI User | May override within allowlisted limits (audited) |
 | Corporate Admin | Defines purpose maps, DLP rules, and routing policy |
-| Enterprise IdP | SSO / OIDC / SAML — identity and group → role |
+| Enterprise IdP | **Google OIDC / OAuth 2.0** for human users in v1; other IdPs later. Identity and group → role (static map now; RBAC later). See §11. |
 | Public LLM providers | Claude, Grok, Gemini, OpenAI, … (controlled egress only) |
 | Internal / customer-hosted LLMs | First-class peers to public models |
 | Internal RAG engine | First-class destination for internal knowledge |
@@ -39,7 +39,7 @@ Nine core components make up the control and data planes:
 
 | # | Component | Responsibility |
 |---|-----------|----------------|
-| 1 | **API Gateway / Proxy (data plane)** | Accept client requests (OpenAI-compatible and/or native), authn, stream proxying. Must stay thin on the hot path. |
+| 1 | **API Gateway / Proxy (data plane)** | Accept client requests (OpenAI-compatible and/or native), **authn** (see §11), stream proxying. Must stay thin on the hot path. |
 | 2 | **Policy Engine** | Purpose → route maps, role checks, Super-user allowlists, budgets, feature flags. OPA + versioned config; fail-closed for egress. See §4. |
 | 3 | **DLP / Input Guardrail Service** | Detect secrets, PII, regulated patterns, custom IP markers; redact or block before external call. Profile-driven. See §5. |
 | 4 | **Semantic Cache** | Dedicated Vector DB + in-boundary embeddings; per-prompt cosine cache for DLP-clean content. See §8. |
@@ -57,15 +57,17 @@ Clients (IDE / Chat / Apps / Agents / Batch)
         ▼
 ┌───────────────────────────────────────────────┐
 │           Customer VPC / Private deploy         │
-│  API Gateway → Policy → DLP → Cache → Route     │
+│  Authn → API Gateway → Policy → DLP → Cache → Route
 │       │              │                          │
 │  Conversation     Metering + Audit              │
-│     Memory        Admin Console                 │
+│     Memory        Admin Console (SSO)           │
 └───────────┬───────────────┬───────────────────┘
             │               │
      Public LLMs     Internal LLMs / RAG
    (controlled egress)
 ```
+
+Authentication is **first** on every request (fail-closed). See **§11**.
 
 Further detail for each component will be expanded in dedicated subsections and ADRs as decisions lock.
 
@@ -109,7 +111,7 @@ Further detail for each component will be expanded in dedicated subsections and 
 
 ### 3.6 Implications for the request path
 
-1. Resolve identity → load or create conversation under isolation keys.
+1. Resolve identity (§11) → load or create conversation under isolation keys.
 2. Assemble context from Redis (hot); fall back to Postgres + rehydrate Redis as needed.
 3. Attach object-storage references for multimodal / file turns.
 4. Apply policy, DLP, cache, and route as usual.
@@ -151,7 +153,7 @@ It does **not** own DLP scanning, semantic cache storage, or conversation memory
 ### 4.3 High-level evaluation flow
 
 ```text
-Request arrives (authn already done)
+Request arrives (authn already done — §11)
         │
         ▼
 ┌───────────────────────┐
@@ -294,7 +296,7 @@ Policy Engine allow + route set + dlp_profile
 
 Flow order on the request path:
 
-1. Authn → purpose resolution → **OPA policy** (allow/deny, route set, **`dlp_profile`**)
+1. Authn (§11) → purpose resolution → **OPA policy** (allow/deny, route set, **`dlp_profile`**)
 2. **DLP scan** under that profile
 3. Semantic cache / route with **redacted** (or original) text only if DLP allows continuation
 
@@ -891,7 +893,7 @@ Enablement must be **audited** (who, when, scope, expected end time). Prefer aut
 
 ### 10.7 Tracing approach
 
-- Propagate **trace context** across data-plane hops: auth → policy → DLP → cache → route → adapter.
+- Propagate **trace context** across data-plane hops: auth (§11) → policy → DLP → cache → route → adapter.
 - Span names reflect components; attributes follow the **same safety rules** as logs (no raw prompt/response bodies on spans by default).
 - Use traces to diagnose latency budgets (e.g. gateway overhead vs provider time) without dumping content into the trace backend.
 - Sampling: configurable; prefer head-based or tail-based policies that still protect privacy (sample decisions, not bodies).
@@ -930,7 +932,170 @@ See **[ADR-007: Observability](adr/007-observability.md)** for the decision reco
 
 ---
 
-## 11. Next architecture sections (planned)
+## 11. Authentication & SSO
+
+> These decisions are **locked** for the initial architecture. Changes require a new ADR that supersedes [ADR-008](adr/008-authentication-sso.md).
+
+Authentication is the **first** hop on the data plane. No Policy, DLP, cache, route, or memory work runs until the Gateway has a validated principal. Downstream components consume an **internal request context** — they never parse Google tokens.
+
+### 11.1 Responsibility
+
+Authentication & SSO answers **who is calling** and establishes the **coarse identity context** every other component needs:
+
+- Challenge human users through the corporate IdP
+- Validate tokens on every API request
+- Map the authenticated subject to a Gateway role
+- Build the internal request context
+- Terminate sessions and revoke refresh tokens on logout
+- **Reject** anything that cannot be authenticated
+
+It does **not** decide purpose, egress, or Super-user allowlists — that remains the Policy Engine (§4). It does **not** issue agent credentials in v1; it only reserves `principal_type = agent` as a distinct future identity.
+
+### 11.2 Key locked decisions
+
+| Decision | Choice |
+|----------|--------|
+| Primary IdP (v1) | **Google** (Workspace / Cloud Identity) via **OIDC / OAuth 2.0** |
+| v1 scope | **Human users only** (chat, IDE, apps, Admin Console) |
+| Protocol | Authorization Code; **PKCE** for public / native clients |
+| Token model | **Short-lived access tokens** + **refresh tokens** |
+| After validation | Gateway builds an **internal request context**; downstream never sees Google tokens |
+| Role mapping (v1) | **Static** IdP group / claim / allow-listed identity → Gateway role |
+| Role mapping (later) | Same context feeds **RBAC-driven** mapping — no authn redesign |
+| Unauthenticated / invalid | **Fail-closed** — reject all |
+| Agents | **Deferred** as a **distinct identity type**. Preferred: **OAuth 2.0 Client Credentials** or **Gateway-issued agent tokens**. Human SSO credentials must **never** be reused |
+| Logout / revocation | Standard **token revocation** + Gateway **session termination** where practical |
+| Other IdPs | Not v1; interfaces stay IdP-agnostic |
+
+### 11.3 Human user flow
+
+```text
+Client (browser / IDE / confidential app)
+        │
+        ▼
+┌────────────────────────────────┐
+│ Valid Gateway access token     │──no──► Google OIDC Authorization Code
+│ or session?                    │         (+ PKCE if public client)
+└───────────────┬────────────────┘
+                │ yes
+                ▼
+┌────────────────────────────────┐
+│ Validate token                 │  Google JWKS, iss, aud, exp, sub
+└───────────────┬────────────────┘
+                │
+     missing / invalid / expired ────────► 401 / 403  (fail-closed)
+     (refresh if refresh token live)
+                │ valid
+                ▼
+┌────────────────────────────────┐
+│ Static role mapping            │  group / claim / allow-list
+│                                │  → Normal | Super | Admin
+│                                │  unmapped → deny
+└───────────────┬────────────────┘
+                ▼
+┌────────────────────────────────┐
+│ Internal request context       │  principal_id, principal_type=human,
+│                                │  role, groups, session, expiry, idp
+└───────────────┬────────────────┘
+                ▼
+        Policy → DLP → Cache → Route
+        (Google tokens do not travel further)
+```
+
+**Refresh:** when the access token expires, the client uses the refresh token at the token endpoint (or the Gateway’s session refresh) without a full interactive login. Refresh failure (revoked, IdP down, user disabled) is **fail-closed**. Existing unexpired access tokens may continue until they lapse — short TTL is the mitigation for Google unavailability, not a fail-open data plane.
+
+**Admin Console** uses the same Google SSO path; it is not a separate password database.
+
+### 11.4 Internal request context
+
+After successful validation the Gateway attaches a context object to the request. This is the **only** identity artefact Policy, Conversation Memory, metering, and audit may depend on.
+
+| Field | Intent |
+|-------|--------|
+| `principal_id` | Stable IdP `sub` — primary isolation and audit key (not display email) |
+| `principal_type` | `human` in v1; `agent` reserved |
+| `role` | `normal_ai_user` \| `super_ai_user` \| `admin` from the current mapper |
+| `groups` / claims | Retained so RBAC can replace the static mapper later |
+| `session_id` | Correlates logout and revocation |
+| `auth_time` / `token_exp` | Bind the hop to a live credential |
+| `idp` | `google` in v1; enum remains open |
+| `mapping_source` + version | `static` + map snapshot id today; `rbac` later |
+
+Logs and traces follow §10: hashed / pseudonymous principal refs; email is not a high-cardinality metric label.
+
+### 11.5 Static role mapping (v1) and path to RBAC
+
+| Phase | How role is derived |
+|-------|---------------------|
+| **v1 — static map** | Admin-maintained table: IdP group, hosted domain, or allow-listed identity → exactly one Gateway role. Published as a versioned snapshot (same operational spirit as policy data). |
+| **Next — data-driven bindings** | Map lives in Policy / Admin data; still a coarse role, but editable without a code deploy and auditable like other snapshots. |
+| **Later — RBAC** | Groups and claims become inputs to OPA. Entitlements can be purpose-, resource-, and time-scoped (including Super-user grants). `role` may become a derived summary rather than the only authorization axis. |
+
+Rules for v1:
+
+- Authenticated but **unmapped** users are **denied**, not defaulted to Normal.
+- Super AI User is a **mapped** role, still constrained by allowlists in Policy (§4.4).
+- The mapper is a **replaceable step after validation**. Token verification and the request-context schema do not change when RBAC lands.
+
+Super-user **governance** (who may grant the role, dual control, time-boxed grants) remains an open operational question; static mapping must not be treated as the permanent answer.
+
+### 11.6 Fail-closed behaviour
+
+| Condition | Outcome |
+|-----------|---------|
+| No token / no session | **Reject** (401) — no anonymous path |
+| Invalid signature, wrong `aud` / `iss`, malformed JWT | **Reject** |
+| Expired access token and refresh fails or is absent | **Reject** |
+| Authenticated but no static-map hit | **Reject** (403) |
+| Google unreachable for **new login or refresh** | **Reject** those attempts; do not skip auth |
+| Live, already-validated access token | May proceed until `exp` (short-lived by design) |
+
+Unauthenticated traffic never reaches Policy, DLP, or any provider adapter. This is the same fail-closed *posture* as egress decisions (ADR-002, ADR-003), applied to identity.
+
+### 11.7 Agents — future distinct identity type
+
+Agents and other non-interactive clients are **first-class future consumers** (F17) but are **not** implemented as human SSO in v1.
+
+| Rule | Detail |
+|------|--------|
+| Identity type | Distinct `principal_type = agent` — never a disguised human session |
+| Preferred issuance | **OAuth 2.0 Client Credentials**, or **Gateway-issued agent tokens** (audience-bound, short-lived, rotatable) |
+| Forbidden | Reusing a person’s refresh token, ID token, password, or browser cookie in an agent runtime |
+| v1 behaviour | Agent credential issuance is **out of scope**; if an agent-shaped caller appears without a supported principal type, **fail-closed** |
+| Why reserved now | Metering and observability already split human vs agent (§9, §10); Policy and rate limits already treat agents as high-risk (§6.5) |
+
+Human SSO is for people. Automation gets its own credentials when that work ships — without redesigning this section’s request context.
+
+### 11.8 Logout and revocation
+
+Support standard patterns where the client and IdP allow it:
+
+- **Gateway session termination** (session id no longer accepted)
+- **Refresh-token revocation** so silent renew stops
+- **RP-initiated logout** to Google for browser sessions
+- Access tokens end by **short TTL**; optional introspection later if a customer requires immediate access-token kill
+
+Revocation and logout events are audit-worthy (who, when, session id) without logging token values.
+
+### 11.9 Placement on the request path
+
+```text
+1. Authenticate / refresh  →  internal request context   (§11)
+2. Purpose resolution + OPA Policy                       (§4)
+3. DLP scan                                              (§5)
+4. Semantic cache                                        (§8)
+5. Routing + adapter                                     (§6, §7)
+6. Conversation memory read/write under principal_id     (§3)
+7. Async metering + observability                        (§9, §10)
+```
+
+If step 1 fails, steps 2–7 do not run.
+
+See **[ADR-008: Authentication & SSO](adr/008-authentication-sso.md)** for the decision record.
+
+---
+
+## 12. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
@@ -942,8 +1107,9 @@ Sections to be added as design deepens:
 - [x] Semantic Cache (see §8, ADR-005)
 - [x] Metering & Feedback (see §9, ADR-006)
 - [x] Observability (see §10, ADR-007)
+- [x] Authentication & SSO (see §11, ADR-008)
 - [ ] Request path sequence (happy path + failure modes)
-- [ ] Identity, roles (Normal vs Super AI User), and service accounts (detail beyond §4.4)
+- [ ] Fine-grained RBAC and Agent / service-account credential issuance (beyond static mapping in §11 and roles in §4.4)
 - [ ] Data model (entities, retention, redaction)
 - [ ] Deployment topology (VPC, HA, secrets)
 - [ ] Threat model and trust-boundary diagrams
@@ -965,3 +1131,4 @@ Sections to be added as design deepens:
 | [ADR-005](adr/005-semantic-cache.md) | Locked Semantic Cache decision |
 | [ADR-006](adr/006-metering-and-feedback.md) | Locked Metering & Feedback decision |
 | [ADR-007](adr/007-observability.md) | Locked Observability decision |
+| [ADR-008](adr/008-authentication-sso.md) | Locked Authentication & SSO decision |

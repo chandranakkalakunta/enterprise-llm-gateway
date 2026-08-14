@@ -13,6 +13,7 @@ It enforces:
 - Purpose-based routing and corporate policy  
 - Strong input guardrails / DLP  
 - Role-aware behaviour (Normal vs Super AI User)  
+- Google OIDC / OAuth 2.0 SSO for human users (fail-closed)  
 - Semantic caching  
 - Strict per-user, per-conversation memory  
 - Privacy-respecting metering and analytics  
@@ -39,6 +40,7 @@ This repository has moved out of general **ideation** into a **dedicated archite
 - **Semantic Cache** — Dedicated Vector DB; in-boundary bge/nomic-class embeddings; cosine ~0.88–0.90; per-prompt cache for DLP-clean content only; TTL + manual + source-doc invalidation. See [ADR-005](docs/adr/005-semantic-cache.md).
 - **Metering & Feedback** — Private-friendly analytical store (ClickHouse strong candidate); aggregated long-term data; 1–5 star feedback with metadata only; chargeback/showback-ready. See [ADR-006](docs/adr/006-metering-and-feedback.md).
 - **Observability** — Privacy by default (no raw prompts/responses); OTel + Prometheus + Grafana (+ Loki / Tempo or Jaeger); toggleable per-user metrics; SIEM export; fail-open. See [ADR-007](docs/adr/007-observability.md).
+- **Authentication & SSO** — Google OIDC / OAuth 2.0 for human users in v1; short-lived access + refresh tokens; static role mapping with a path to RBAC; fail-closed unauthenticated traffic; agents deferred as a distinct identity type. See [ADR-008](docs/adr/008-authentication-sso.md).
 
 Living architecture: [docs/architecture.md](docs/architecture.md).
 
@@ -49,7 +51,7 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
 | [docs/overview.md](docs/overview.md) | Problem statement, vision, KPIs |
 | [docs/requirements.md](docs/requirements.md) | Functional & non-functional requirements |
 | [docs/use-cases.md](docs/use-cases.md) | Personas and scenarios |
-| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through observability) |
+| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through authentication & SSO) |
 | [docs/open-questions.md](docs/open-questions.md) | Open product / technical questions |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 | [design/](design/) | Working design notes and diagrams (as they land) |
@@ -74,7 +76,8 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
         ├── 004-routing-and-adapters.md
         ├── 005-semantic-cache.md
         ├── 006-metering-and-feedback.md
-        └── 007-observability.md
+        ├── 007-observability.md
+        └── 008-authentication-sso.md
 ```
 
 ## One-sentence summary

@@ -14,7 +14,7 @@
 | 8 | Should purpose be **client-declared only**, or do we invest in **automatic purpose classification** early? | Product | Open | Auto-class adds error modes; declared is simpler and auditable |
 | 9 | How much **raw prompt retention** do security teams demand for forensics vs privacy commitments to employees? | Security + Legal + HR | Open | Tension between investigation and trust |
 | 10 | Reference **client surface** for v1: OpenAI-compatible proxy only, plus which IDE/chat integrations? | Product | Open | DX drives adoption |
-| 11 | Super AI User **governance**: who can grant the role, time-bounded grants, dual control? | Security + Admin | Open | Avoid permanent standing privilege sprawl |
+| 11 | Super AI User **governance**: who can grant the role, time-bounded grants, dual control? | Security + Admin | Open | v1 uses **static IdP-group mapping** ([ADR-008](adr/008-authentication-sso.md)); RBAC, time-boxed grants, and dual control remain future. Avoid permanent standing privilege sprawl |
 | 12 | Can we meet **&lt; 30 ms p50 overhead** with on-path DLP + embeddings in the same region as clients? | Eng | Open | May need staged DLP (fast rules first, deep scan async for non-egress) |
 
 ## Risks & Mitigations

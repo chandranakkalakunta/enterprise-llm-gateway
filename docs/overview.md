@@ -64,7 +64,7 @@ A **policy-driven control plane** sits between all enterprise AI clients and all
 
 Rough request path:
 
-1. Authenticate the user (SSO / IdP) and resolve role (**Normal** vs **Super AI User**) and allowed purposes.
+1. Authenticate the user via **Google OIDC / OAuth 2.0** (v1; human users) and resolve role (**Normal** vs **Super AI User**) via static mapping (RBAC later). Unauthenticated requests are rejected.
 2. Classify or accept the **purpose** of the request (explicit purpose, client-declared, or policy-inferred).
 3. Run **input guardrails / DLP** (detect, redact, or block sensitive content according to policy).
 4. Check **semantic cache** for a safe, policy-compatible hit.
