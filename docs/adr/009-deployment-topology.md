@@ -43,7 +43,7 @@ ADR-006 left the analytical store as a private-friendly warehouse with ClickHous
 
 Phase 1 implements **Google Cloud only**. Private Data Center is the documented future analogue — not a Phase 1 build.
 
-![High-level deployment topology](../assets/deployment-topology-overview.svg)
+![High-level deployment topology](../assets/deployment-topology-overview.jpg)
 
 *Figure 1. Google Cloud Phase 1 (implemented) versus Private Data Center (documented future). Same Gateway binary and configuration model.*
 

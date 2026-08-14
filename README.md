@@ -71,7 +71,7 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
     ├── open-questions.md
     ├── assets/
     │   ├── logical-component-diagram.jpg
-    │   ├── deployment-topology-overview.svg
+    │   ├── deployment-topology-overview.jpg
     │   └── deployment-topology-gcp-phase1.svg
     └── adr/
         ├── 001-conversation-memory-storage.md

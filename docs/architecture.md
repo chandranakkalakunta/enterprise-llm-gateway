@@ -1131,7 +1131,7 @@ It does **not** change the request path in §11.9. Auth is still first; Policy a
 
 Phase 1 **implements the left-hand environment**. The right-hand Private DC column is the documented analogue so GCP APIs do not leak into the application core.
 
-![High-level deployment topology](assets/deployment-topology-overview.svg)
+![High-level deployment topology](assets/deployment-topology-overview.jpg)
 
 *Figure 2. Google Cloud Phase 1 (implemented) versus Private Data Center (documented future). Same Gateway binary and configuration model. Single-region HA in v1.*
 
@@ -1283,7 +1283,7 @@ Sections to be added as design deepens:
 | [Use cases](use-cases.md) | Personas and scenarios |
 | [Open questions](open-questions.md) | Unresolved product / tech risks |
 | [Logical component diagram](assets/logical-component-diagram.jpg) | Users, Gateway, internal resources, external LLMs |
-| [High-level topology](assets/deployment-topology-overview.svg) | GCP Phase 1 vs Private DC |
+| [High-level topology](assets/deployment-topology-overview.jpg) | GCP Phase 1 vs Private DC |
 | [GCP Phase 1 topology](assets/deployment-topology-gcp-phase1.svg) | Detailed GCP deployment |
 | [ADR-001](adr/001-conversation-memory-storage.md) | Locked memory storage decision |
 | [ADR-002](adr/002-policy-engine.md) | Locked Policy Engine (OPA) decision |
