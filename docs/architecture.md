@@ -1332,7 +1332,94 @@ See **[ADR-010: Admin Console](adr/010-admin-console.md)** for the decision reco
 
 ---
 
-## 14. Next architecture sections (planned)
+## 14. Threat Model
+
+This is a **practical, architecture-focused** threat model for the Gateway. It is **not** a formal security assessment, penetration-test report, or compliance artefact. It exists so implementation phases know which attacks the locked design already assumes, and which residuals they must still test.
+
+Trust-boundary diagrams already in this repository: [logical component diagram](assets/logical-component-diagram.jpg), [high-level topology](assets/deployment-topology-overview.jpg), [GCP Phase 1](assets/deployment-topology-gcp-phase1.svg).
+
+**Convention:** Input Guardrails / DLP, Policy, Authn, and controlled egress are **controls**. They are not listed as threats.
+
+### 14.1 Purpose
+
+Give architects and implementers a shared list of:
+
+- Where trust changes
+- What is worth stealing or breaking
+- The top threats that would defeat the Gateway’s reason to exist
+- Which **already-locked** ADRs mitigate each
+- What remains accepted or deferred
+
+A later implementation-phase workshop (red team, abuse cases, test plan) should go deeper. It should not reopen these boundaries without a new ADR.
+
+### 14.2 Trust boundaries
+
+| Boundary | What crosses | Posture |
+|----------|----------------|---------|
+| **Internet → Gateway edge** | Human clients (and later agents). TLS, identity tokens. | **Fail-closed** if unauthenticated (ADR-008). No anonymous data plane. |
+| **Gateway → commercial LLM providers** | Post-policy, post-DLP prompts; streamed completions; provider keys. | **Controlled egress only** (ADR-009). Policy/DLP deny or failure → **no packet** (ADR-002, ADR-003). |
+| **Gateway → internal RAG / private LLMs** | In-boundary retrieve/generate. | Private IP / PSC. First-class destinations; still subject to policy and (profile-dependent) DLP. |
+| **Gateway → Google IdP** | OIDC authorization, token validation, JWKS, refresh. | Human SSO only in v1. Refresh / new login fail-closed if IdP is down. |
+| **Admin Console → configuration plane** | Purpose maps, DLP profiles, quotas, cache flags, snapshot publish. | **Admin role only.** No config visibility for non-admins (ADR-010). Every write audited. |
+| **Data plane → Conversation Memory** | Turns, summaries, attachment refs under `principal_id` + `conversation_id`. | Strict isolation (ADR-001). No cross-user keys. |
+| **Data plane → observability / metering stores** | Metrics, allow-listed logs, traces, **metadata-only** meter events. | **No raw prompts** by default (ADR-006, ADR-007). Telemetry **fail-open**; analytics not on the deny path. |
+| **Workloads → Secret Manager** | Provider keys, OIDC client secrets. | Workload Identity; no long-lived keys on disk (ADR-009). |
+
+The Gateway is the **policy source of truth** inside the customer VPC. Clients may hint purpose; they do not choose the route.
+
+### 14.3 Key assets
+
+| Asset | Why it matters |
+|-------|----------------|
+| **User prompts and conversation history** | Corporate IP, PII, secrets employees paste. Isolation and DLP exist for this. |
+| **Provider API keys / secrets** | Shared enterprise keys; theft = unbounded spend and egress. |
+| **Policy and DLP configurations** | Changing a map or profile is a governance event; a bad publish opens egress. |
+| **Admin sessions and credentials** | Console access is standing power over the control plane. |
+| **Cached responses** | Shared (when eligible) answers; wrong scope = cross-purpose or sensitive leak. |
+| **Metering / analytics data** | Chargeback and quality signals; must not become a prompt archive. |
+| **Internal request context** | `principal_id`, role, groups — forged context would bypass Policy. |
+
+### 14.4 Top threats and mitigations
+
+| Threat | What it looks like | Primary mitigations (already designed) |
+|--------|--------------------|----------------------------------------|
+| **Identity and access abuse** | Stolen access/refresh token; forged Google JWT; non-admin hitting Admin Console; agent using a **human** SSO token; unmapped user granted Normal by default | Short-lived tokens + refresh revocation (ADR-008). Validate `iss` / `aud` / sig / `exp`. Unmapped users **denied**. Internal request context built **only** after validation — downstream never parses Google tokens. Console **Admin-only**, no greyed-out leak (ADR-010). Agents are a **distinct identity type**; human credentials must never be reused (ADR-008). |
+| **Prompt injection / jailbreak-style attacks** | User or retrieved RAG text tries to override system policy (“ignore DLP”, “you are Super”, “exfiltrate the key”). Tool/agent loops that launder instructions | Gateway **does not take policy from the prompt**. OPA evaluates principal, purpose, route, egress — not model-authored allow (ADR-002). DLP scans **user-supplied text** before external call (ADR-003). Super overrides require **allowlist + audit**, not a magic phrase. Provider adapters do not forward raw secrets that DLP redacted. Output filtering is **not v1** (residual). |
+| **Sensitive data exfiltration** | Secrets/PII in prompts to public models; raw prompts in logs, traces, or metering; break-glass left on; SIEM used as a prompt archive | DLP redact (default) / hard block (high-sensitivity); **fail-closed** on scanner failure for external routes (ADR-003). Controlled allow-listed egress (ADR-009). Logs/traces: **allow-listed fields only**, no raw prompts (ADR-007). Metering: metadata aggregates, not bodies (ADR-006). Memory isolation keys (ADR-001). Break-glass and per-user metrics are **time-limited and audited**. |
+| **Policy / DLP / purpose bypass** | Client declares a purpose that unlocks a public model; Super-user override outside allowlist; skip DLP by calling an adapter URL; mutate live policy mid-request; “cache hit” of a pre-DLP answer | Purpose is **optional** but still **OPA-bound**; invalid purpose does not unlock routes (ADR-002). Data plane is the **only** path to adapters. Cache **after** Policy + DLP; redacted/sensitive content never written (ADR-005). Policy **pinned snapshots**; console publish is draft → validate → activate (ADR-002, ADR-010). Out-of-allowlist overrides **denied**. Unauthenticated / non-admin = no evaluation. |
+| **Rate / quota abuse and runaway agents** | Scripted clients burn tokens; a future agent loops; one purpose starves others; Super override used as a cost bypass | Quotas/limits per **user**, **agent**, and **purpose**; throttle or hard-block (ADR-004). Agents are **high-risk**: stricter default burst/RPS. Overrides **do not** bypass quota unless admin grants a higher envelope. Hot counters (ADR-006) sit on the control path; warehouse does not. Agent issuance is **out of v1** — until then, agent-shaped callers without a supported principal type **fail-closed** (ADR-008). |
+| **Cache poisoning or cross-user / cross-purpose leakage** | Shared cache returns another team’s answer; redacted prompt used as a key; RAG cache stale after source-doc change; Vector DB scoped too loosely | Dedicated Vector DB; scope at least **purpose + sensitivity** (ADR-005). Only **DLP-clean, non-sensitive** entries. No cross-purpose hits. Conversation Memory is **not** the cache. TTL + manual + source-document invalidation. Cache **fail-open** (bypass, do not serve garbage). Isolation `user_id` + `conversation_id` on memory (ADR-001). |
+| **Admin misconfiguration or insider abuse** | Publish a purpose that allows unrestricted public egress; disable DLP profile; grant standing Super/Admin via static map; leave investigation metrics on | Admin-only console; **no** Super visibility into config (ADR-010). Versioned publish + audit (who, what, snapshot). `General` cannot be deleted. High-sensitivity DLP still **blocks** when the profile says so. Super-user **governance** (time-boxed grants) remains an open operational question — static mapping is temporary (ADR-008). Dual-control is **not** locked in v1 (residual). |
+| **Availability attacks on critical dependencies** | IdP outage; Cloud SQL / Redis / Vector DB down; provider 5xx storm; observability backend saturation used to stall the data plane; NAT/allow-list lockout | Auth: live access tokens may continue until `exp`; new login/refresh **fail-closed** (ADR-008). Routing: capped retries, **circuit breakers**, `General` fallback (ADR-004). Cache/metering/telemetry **fail-open** so they cannot hostage the stream (ADR-005, ADR-006, ADR-007). Policy/DLP on **external** routes **fail-closed**. Single-region multi-AZ HA (ADR-009); region loss is not a v1 RTO target (residual). |
+
+### 14.5 Residual risks and assumptions
+
+| Residual / assumption | Stance |
+|-----------------------|--------|
+| **v1 DLP is pattern + basic NER, text-only** | Will miss some secrets and all file/image payloads until that follow-on. Fail-closed on **errors**, not on unknown-unknowns. |
+| **No v1 output / response guardrails** | Provider-side filters and user reporting are the backstop. Prompt injection that only manifests in the **answer** is weaker-covered. |
+| **Purpose auto-classifier can be wrong** | Falls back to `General`; still OPA-bound. Adversarial prompts may steer classification — residual; monitor purpose provenance. |
+| **Provider-side controls are not ours** | We minimise what leaves; we do not audit the vendor’s training use beyond contract/DPA. |
+| **Single-region HA in v1** | Zone loss in scope; region loss is not (ADR-009). |
+| **Static role mapping** | Standing Admin / Super grants can sprawl until RBAC and time-boxed grants land. |
+| **Agents not issued in v1** | Residual is mainly **human-credential reuse** if someone tries; design forbids it and fail-closes unknown principal types. |
+| **Google IdP availability** | New sessions depend on Google. Mitigate with short TTL + runbook, not fail-open auth. |
+| **Admin dual-control / four-eyes** | Not locked. Insider publish of a dangerous snapshot is mitigated by audit and review, not by a second approver in v1. |
+| **Formal threat-model workshop still needed** | This section is the architecture baseline, not a substitute for red-team or tabletop in implementation. |
+
+### 14.6 Guidance for implementation phases
+
+Treat this section as the **backlog seed**, not the test plan:
+
+1. Build **abuse-case tests** for each row in §14.4 (unauthenticated, wrong `aud`, purpose spoof, DLP fail-closed, cache scope miss, quota 429, non-admin console 403).
+2. Add **CI / policy-unit tests** for snapshot publish (cannot delete `General`; allowlist-only overrides).
+3. Wire **alerts** to the ADR-007 signals that correspond to these threats (policy deny spikes, DLP block spikes, circuit open, agent-vs-human split, admin publish events).
+4. Schedule the **threat-model workshop** still listed in [open questions](open-questions.md) (insider Super user, cache leakage, key theft, injection via tools) before calling security “done.”
+5. Do **not** weaken fail-closed auth / egress or the “no raw prompts in default telemetry” rule without a superseding ADR.
+
+---
+
+## 15. Next architecture sections (planned)
 
 Sections to be added as design deepens:
 
@@ -1347,10 +1434,10 @@ Sections to be added as design deepens:
 - [x] Authentication & SSO (see §11, ADR-008)
 - [x] Deployment Topology & HA (see §12, ADR-009)
 - [x] Admin Console (see §13, ADR-010)
+- [x] Threat model (see §14)
 - [ ] Request path sequence (happy path + failure modes)
 - [ ] Fine-grained RBAC and Agent / service-account credential issuance (beyond static mapping in §11 and roles in §4.4)
 - [ ] Data model (entities, retention, redaction)
-- [ ] Threat model and trust-boundary diagrams
 
 ---
 

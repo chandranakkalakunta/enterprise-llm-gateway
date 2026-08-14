@@ -53,7 +53,7 @@ Living architecture: [docs/architecture.md](docs/architecture.md).
 | [docs/overview.md](docs/overview.md) | Problem statement, vision, KPIs |
 | [docs/requirements.md](docs/requirements.md) | Functional & non-functional requirements |
 | [docs/use-cases.md](docs/use-cases.md) | Personas and scenarios |
-| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through Admin Console) |
+| [docs/architecture.md](docs/architecture.md) | **Living architecture** (system context, components, locked decisions through threat model) |
 | [docs/open-questions.md](docs/open-questions.md) | Open product / technical questions |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 | [design/](design/) | Working design notes and diagrams (as they land) |

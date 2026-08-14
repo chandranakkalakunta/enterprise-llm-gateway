@@ -49,5 +49,5 @@
 - [ ] **Internal RAG adapter PoC** against one reference RAG API (retrieve + answer + citations)
 - [ ] **Legal memo**: gateway as traffic intermediary; logging; private deployment vs hosted; employee monitoring concerns
 - [ ] **Packaging research**: interviews with 3–5 platform/AI CoE buyers on willingness to pay for governance hop
-- [ ] **Threat model workshop**: insider Super user, cache leakage, provider key theft, prompt injection via tools
+- [ ] **Threat model workshop**: insider Super user, cache leakage, provider key theft, prompt injection via tools — architecture baseline is now [§14](architecture.md#14-threat-model); workshop remains an implementation-phase activity
 - [ ] **Competitive teardown**: existing AI gateways / LLM proxies / enterprise AI control planes — gaps vs this design
