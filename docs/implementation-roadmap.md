@@ -26,7 +26,7 @@ This document is the sequencing contract: what each phase must achieve, what it 
 | **Sub-phases at phase start** | Breakdown, spikes, and the first execution prompt are written **when the phase opens**, not now. |
 | **Design discussion before execution** | No implementation prompt until the phase’s design note and sub-phase list exist. |
 | **Testing every phase** | Unit/component + integration + phase-exit verification. Fuller pack in Phase 6 / release. See [testing-strategy.md](testing-strategy.md). |
-| **UI Specification before UI build** | Admin Console (and any user-facing UI) waits on a UI Spec **after this roadmap** and **before** that work in Phase 5. |
+| **UI Specification before UI build** | Admin Console waits on [docs/ui-spec.md](ui-spec.md) (**created**). Still a **prerequisite** before Phase 5 Admin UI implementation. End-user chat UI remains deferred. |
 | **Private-first, GCP Phase 1** | Customer VPC on Google Cloud. Same binary and configuration model as a future Private DC (ADR-009). |
 | **Production-grade over speed theater** | Fail-closed auth/egress, no raw prompts in default telemetry, pinned dependencies, evidence at the gate. |
 
@@ -155,7 +155,7 @@ Phase 1–6 is the **v1 implementation envelope**. Items in §6 stay out unless 
 
 - Async metering to **BigQuery** (metadata only; ADR-006 + ADR-009)
 - Optional **1–5 star** feedback joined to request metadata, not bodies
-- **Admin Console UI** — **only after** the UI Specification exists
+- **Admin Console UI** — only after [UI Specification](ui-spec.md) (now **created**; still a Phase 5 build prerequisite)
 - Admin role only; no config visibility for Super/Normal users (ADR-010)
 - Policy snapshot publish (draft → validate → activate) from the console
 - v1 console areas: purposes, ordered lists, DLP profiles/patterns, quotas (as far as Phase 6 will enforce), cache settings, operational links
@@ -203,7 +203,7 @@ Phase 1–6 is the **v1 implementation envelope**. Items in §6 stay out unless 
 
 | Work | When |
 |------|------|
-| **UI Specification** | **After this roadmap**, **before** Admin Console / any user UI implementation (Phase 5) |
+| **UI Specification** | **Created:** [docs/ui-spec.md](ui-spec.md). Remains a **prerequisite** before Admin Console implementation in Phase 5. End-user chat UI is out of that spec. |
 | **Testing Strategy** | Applies **every** phase; suites named in [testing-strategy.md](testing-strategy.md) |
 | **Documentation hygiene** | At each phase boundary: README/status, phase-exit note, backlog updates, no stale “in progress” lies |
 | **Backlog** | [docs/backlog.md](backlog.md) holds Architecture deferrals; do not silently implement them inside Phases 1–6 |
@@ -231,7 +231,7 @@ Other B-items (request-path write-up, physical data model, exact v1 provider set
 
 ## 7. Next step after this document
 
-1. **Create the UI Specification** (Admin Console v1 surfaces; any reference client UI if in scope).
+1. **UI Specification** — **done:** [docs/ui-spec.md](ui-spec.md) (Admin Console only). Still required reading before Phase 5 UI work.
 2. **Open Phase 1** with a design discussion and **sub-phase breakdown**.
 3. Execute Phase 1 against [testing-strategy.md](testing-strategy.md) (harness, first smoke, recorded exit).
 

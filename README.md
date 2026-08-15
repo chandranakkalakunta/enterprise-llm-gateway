@@ -60,6 +60,7 @@ The Threat Model lives in [architecture.md §14](docs/architecture.md#14-threat-
 | [docs/architecture.md](docs/architecture.md) | **Living architecture** (locked through threat model) |
 | [docs/testing-strategy.md](docs/testing-strategy.md) | Testing strategy (suites, phase-exit evidence, deploy smoke) |
 | [docs/implementation-roadmap.md](docs/implementation-roadmap.md) | Implementation roadmap (Phases 1–6) |
+| [docs/ui-spec.md](docs/ui-spec.md) | Admin Console UI specification (prerequisite for Phase 5 UI) |
 | [docs/open-questions.md](docs/open-questions.md) | Remaining product / technical questions |
 | [docs/backlog.md](docs/backlog.md) | Deferrals carried into Implementation |
 | [docs/phase-closure/architecture-phase.md](docs/phase-closure/architecture-phase.md) | Architecture phase closure record |
@@ -81,6 +82,7 @@ The Threat Model lives in [architecture.md §14](docs/architecture.md#14-threat-
     ├── backlog.md
     ├── testing-strategy.md
     ├── implementation-roadmap.md
+    ├── ui-spec.md
     ├── phase-closure/
     │   └── architecture-phase.md
     ├── assets/
