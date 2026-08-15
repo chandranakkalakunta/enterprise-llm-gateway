@@ -93,7 +93,7 @@ Intensity **grows**; it does not appear from nowhere in Phase 6.
 | **5 — Admin, metering, observability** | Admin-only access; audit events; **no raw prompts** in meter/log fixtures |
 | **6 — Hardening & HA** | Full regression + security pack + performance + HA checks; release evidence |
 
-Exact phase names follow the Implementation Roadmap when it lands. If the roadmap numbering shifts, **this table’s intent stays**: early harness, mid-phase functional/guardrail, late full pack.
+Phase names match the [Implementation Roadmap](implementation-roadmap.md). If numbering ever shifts, **this table’s intent stays**: early harness, mid-phase functional/guardrail, late full pack.
 
 ---
 

@@ -1,7 +1,8 @@
 # Overview
 
 > **Status:** Architecture complete (2026-08-14). Implementation not started.  
-> **Phase 1 deploy:** Google Cloud (customer VPC). Private Data Center is documented, not built.
+> **Phase 1 deploy:** Google Cloud (customer VPC). Private Data Center is documented, not built.  
+> **Delivery plan:** [Implementation roadmap](implementation-roadmap.md) (Phases 1–6).
 
 ## Problem Statement
 

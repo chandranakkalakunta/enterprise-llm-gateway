@@ -2,7 +2,8 @@
 
 Items explicitly **deferred** during Architecture. They are not forgotten; they are out of the locked v1 architecture envelope unless a new ADR says otherwise.
 
-**Source:** [Architecture phase closure](phase-closure/architecture-phase.md) (2026-08-14).
+**Source:** [Architecture phase closure](phase-closure/architecture-phase.md) (2026-08-14).  
+**Sequencing:** [Implementation roadmap](implementation-roadmap.md) — these items stay **out of Phases 1–6** unless explicitly pulled forward.
 
 | ID | Item | Why deferred | Home when it lands |
 |----|------|--------------|--------------------|
