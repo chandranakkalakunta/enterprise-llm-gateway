@@ -1451,6 +1451,7 @@ Architecture **component design is complete**. Remaining bullets are **Implement
 | [Open questions](open-questions.md) | Remaining product / tech risks |
 | [Backlog](backlog.md) | Deferrals carried into Implementation |
 | [Architecture phase closure](phase-closure/architecture-phase.md) | Formal close of Architecture |
+| [Testing strategy](testing-strategy.md) | Suites, phase-exit evidence, deploy smoke (living; not an ADR) |
 | [Logical component diagram](assets/logical-component-diagram.jpg) | Users, Gateway, internal resources, external LLMs |
 | [High-level topology](assets/deployment-topology-overview.jpg) | GCP Phase 1 vs Private DC |
 | [GCP Phase 1 topology](assets/deployment-topology-gcp-phase1.svg) | Detailed GCP deployment |

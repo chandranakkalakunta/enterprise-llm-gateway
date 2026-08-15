@@ -58,6 +58,7 @@ The Threat Model lives in [architecture.md §14](docs/architecture.md#14-threat-
 | [docs/requirements.md](docs/requirements.md) | Functional & non-functional requirements |
 | [docs/use-cases.md](docs/use-cases.md) | Personas and scenarios |
 | [docs/architecture.md](docs/architecture.md) | **Living architecture** (locked through threat model) |
+| [docs/testing-strategy.md](docs/testing-strategy.md) | Testing strategy (suites, phase-exit evidence, deploy smoke) |
 | [docs/open-questions.md](docs/open-questions.md) | Remaining product / technical questions |
 | [docs/backlog.md](docs/backlog.md) | Deferrals carried into Implementation |
 | [docs/phase-closure/architecture-phase.md](docs/phase-closure/architecture-phase.md) | Architecture phase closure record |
@@ -77,6 +78,7 @@ The Threat Model lives in [architecture.md §14](docs/architecture.md#14-threat-
     ├── use-cases.md
     ├── open-questions.md
     ├── backlog.md
+    ├── testing-strategy.md
     ├── phase-closure/
     │   └── architecture-phase.md
     ├── assets/
