@@ -6,7 +6,7 @@
 > **Architecture:** [ADR-010](adr/010-admin-console.md), [ADR-008](adr/008-authentication-sso.md), [architecture §13](architecture.md#13-admin-console)  
 > **Roadmap:** [implementation-roadmap.md](implementation-roadmap.md) — this spec is a **prerequisite** for Admin UI build
 
-This document is **implementable**. Pixel-perfect mockups are not required; layout, components, copy, states, and product rules are.
+This document is **implementable**. Reference mockups live under [`docs/assets/ui/`](assets/ui/) and are embedded on the matching screens below. They illustrate layout and density; the text specification is authoritative where a mockup’s sidebar labels or extra nav items differ from the locked IA in §3.2.
 
 ---
 
@@ -157,6 +157,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 
 ### 5.1 Login
 
+![Admin Console Login](assets/ui/ui-login.jpg)
+
 **Purpose.** Authenticate with Google. The only screen unauthenticated users may see.
 
 **Entry.** Any unauthenticated request to the console origin; post-logout; expired refresh.
@@ -177,6 +179,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 ---
 
 ### 5.2 Dashboard
+
+![Admin Console Dashboard](assets/ui/ui-dashboard.jpg)
 
 **Purpose.** Orient an admin: live snapshot, drafts waiting, recent denials/blocks (counts only), links out.
 
@@ -205,6 +209,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 
 ### 5.3 Purposes list
 
+![Admin Console Purposes list](assets/ui/ui-purposes-list.jpg)
+
 **Purpose.** Catalogue of purposes the classifier and clients may use.
 
 **Entry.** Sidebar **Purposes**.
@@ -231,6 +237,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 ---
 
 ### 5.4 Create / Edit Purpose
+
+![Admin Console Edit Purpose](assets/ui/ui-edit-purpose.jpg)
 
 **Purpose.** Define one purpose: identity, ordered models, Super allowlist, DLP profile, cache, status.
 
@@ -261,6 +269,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 ---
 
 ### 5.5 DLP
+
+![Admin Console DLP Profiles](assets/ui/ui-dlp-profiles.jpg)
 
 **Purpose.** Manage **profiles** (category → redact/block) and **custom patterns**.
 
@@ -293,6 +303,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 
 ### 5.6 Rate Limits & Quotas
 
+![Admin Console Rate Limits & Quotas](assets/ui/ui-rate-limits.jpg)
+
 **Purpose.** Set per-**user**, per-**agent**, per-**purpose** limits (ADR-004). Enforcement hardens in Phase 6; the console still edits the data.
 
 **Entry.** Sidebar **Rate Limits**.
@@ -316,6 +328,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 
 ### 5.7 Cache
 
+![Admin Console Semantic Cache settings](assets/ui/ui-cache-settings.jpg)
+
 **Purpose.** Global semantic-cache policy, per-purpose overrides, manual invalidation (ADR-005).
 
 **Entry.** Sidebar **Cache**.
@@ -337,6 +351,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 ---
 
 ### 5.8 Policy
+
+<!-- Mockup pending — no Policy screen image in the approved set. -->
 
 **Purpose.** Admin-facing **snapshot lifecycle**: what is live, what is draft, validate, publish. Not a Rego IDE.
 
@@ -362,6 +378,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 
 ### 5.9 Audit Log
 
+![Admin Console Audit Log](assets/ui/ui-audit-log.jpg)
+
 **Purpose.** Read-only history of **admin** (and security-relevant) events.
 
 **Entry.** Sidebar **Audit Log**; Dashboard recent-actions; deep links `?object=purpose:coding`.
@@ -384,6 +402,8 @@ When the form edits snapshot-backed config, show a pill: **Draft** vs **Matches 
 ---
 
 ### 5.10 Settings
+
+<!-- Mockup pending — no Settings screen image in the approved set. -->
 
 **Purpose.** System toggles and operational links — not user management.
 

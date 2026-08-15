@@ -88,7 +88,8 @@ The Threat Model lives in [architecture.md §14](docs/architecture.md#14-threat-
     ├── assets/
     │   ├── logical-component-diagram.jpg
     │   ├── deployment-topology-overview.jpg
-    │   └── deployment-topology-gcp-phase1.svg
+    │   ├── deployment-topology-gcp-phase1.svg
+    │   └── ui/                 # Admin Console reference mockups
     └── adr/
         ├── 001-conversation-memory-storage.md
         ├── 002-policy-engine.md
