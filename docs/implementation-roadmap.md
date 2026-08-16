@@ -51,27 +51,30 @@ Phase 1–6 is the **v1 implementation envelope**. Items in §6 stay out unless 
 
 ### Phase 1 — Foundation
 
+**Plan:** [docs/phases/phase-1.md](phases/phase-1.md) — sub-phases **1.1–1.8** are locked. First provider = **Grok**. API = **OpenAI-compatible** (`/v1/chat/completions`) from day one. Compute = **Cloud Run first** (GKE only if Cloud Run is insufficient).
+
 **Goal.** A **deployable skeleton** in a customer GCP project: identity, a thin request path, hybrid compute as needed, secrets, and enough observability to see the hop.
 
 **Major capabilities**
 
 - Google OIDC / OAuth 2.0 for **human** users; fail-closed unauthenticated traffic (ADR-008)
 - Internal request context after validation (downstream does not parse Google tokens)
-- Thin data-plane service (OpenAI-compatible and/or native stub) that can accept an authenticated request
-- **Cloud Run + GKE** as needed for the skeleton (ADR-009); Workload Identity + Secret Manager
+- Thin data-plane service — **OpenAI-compatible** `/v1/chat/completions` from day one
+- First adapter: **Grok** (authenticated request reaches Grok)
+- **Cloud Run first** (ADR-009); GKE only if Cloud Run is insufficient; Workload Identity + Secret Manager
 - Minimal structured logs / metrics (ADR-007 posture: no raw prompts)
 - CI harness and first **Smoke** + unit tests ([testing strategy](testing-strategy.md) §4–5)
 
 **Exit criteria**
 
 - Deployed to a non-prod GCP environment in the customer VPC pattern
-- Anonymous request rejected; authenticated request reaches a stub (or safe echo) **without** calling a public model unless explicitly allowed by a later phase
+- Anonymous request rejected; authenticated request **reaches Grok** via the adapter (see [phase-1.md](phases/phase-1.md) exit checklist)
 - Secrets not on disk / not in the image
 - Phase-exit evidence recorded (smoke + unit; integration as soon as a composition exists)
 
 **Tests.** Foundation emphasis: harness, fixtures, CI skeleton, first smoke. Privacy-preserving samples only.
 
-**Non-goals this phase:** OPA/DLP, real provider adapters, memory/cache, Admin Console, BigQuery metering, HA hardening, Agent tokens, Private DC.
+**Non-goals this phase:** OPA/DLP, additional providers, memory/cache, Admin Console, BigQuery metering, HA hardening, Agent tokens, Private DC, GKE unless Cloud Run fails.
 
 ---
 
