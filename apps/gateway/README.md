@@ -1,6 +1,6 @@
 # @ellmgw/gateway
 
-Phase 1 Foundation skeleton. OpenAI-compatible surface (1.4), Google OIDC (1.3), and the Grok adapter (1.5) are **not** in this package yet.
+Phase 1 Foundation. **1.3 Google OIDC** is in this package. OpenAI-compatible chat (1.4) and the Grok adapter (1.5) are not.
 
 ## Prerequisites
 
@@ -21,16 +21,44 @@ Default listen address: `http://127.0.0.1:8080`.
 ```bash
 curl -sS http://127.0.0.1:8080/health
 # {"status":"ok","service":"gateway"}
+
+curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/v1/me
+# 401
 ```
 
-Optional env (copy `apps/gateway/.env.example`):
+Copy `apps/gateway/.env.example` to `apps/gateway/.env` and fill OIDC values (never commit `.env`). Export them before `dev`/`start`, e.g.:
 
-| Variable   | Default       | Notes                                   |
-| ---------- | ------------- | --------------------------------------- |
-| `NODE_ENV` | `development` | `development` \| `test` \| `production` |
-| `PORT`     | `8080`        | TCP port                                |
+```bash
+set -a && source apps/gateway/.env && set +a
+pnpm --filter @ellmgw/gateway dev
+```
 
-Do not put secrets in `.env`. None are required for 1.1.
+Then open `http://localhost:8080/auth/login` in a browser (Google OAuth client must allow `http://localhost:8080/auth/callback`).
+
+## Environment
+
+| Variable             | Default                               | Notes                                          |
+| -------------------- | ------------------------------------- | ---------------------------------------------- |
+| `NODE_ENV`           | `development`                         | `development` \| `test` \| `production`        |
+| `PORT`               | `8080`                                | TCP port                                       |
+| `OIDC_ISSUER`        | `https://accounts.google.com`         | Google accounts issuer                         |
+| `OIDC_CLIENT_ID`     | _(empty)_                             | OAuth client ID; required for `/auth/login`    |
+| `OIDC_CLIENT_SECRET` | _(empty)_                             | Never commit; required for `/auth/callback`    |
+| `OIDC_AUDIENCE`      | client ID if unset                    | JWT `aud` for ID-token validation              |
+| `OIDC_REDIRECT_URI`  | `http://localhost:8080/auth/callback` | Must match the Google client                   |
+| `ADMIN_EMAILS`       | `admin@chandraailabs.com`             | Comma-separated; those emails get role `admin` |
+
+Browser session: httpOnly cookie `ellmgw_id_token` (Google **ID token**). Local HTTP sets `Secure=false`; production (`NODE_ENV=production`) sets `Secure`. Cookie is not a refresh-token store — when the ID token expires, sign in again. API clients should send `Authorization: Bearer <id_token>`.
+
+## Routes
+
+| Method | Path             | Auth                                  |
+| ------ | ---------------- | ------------------------------------- |
+| GET    | `/health`        | Public                                |
+| GET    | `/v1/me`         | Required (Bearer or session cookie)   |
+| GET    | `/auth/login`    | Starts Google authorization-code flow |
+| GET    | `/auth/callback` | Exchanges `code`; sets session cookie |
+| GET    | `/auth/logout`   | Clears cookies                        |
 
 ## Scripts
 

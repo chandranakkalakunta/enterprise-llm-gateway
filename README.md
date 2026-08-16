@@ -43,7 +43,7 @@ pnpm --filter @ellmgw/gateway dev
 curl -sS http://127.0.0.1:8080/health
 ```
 
-See [apps/gateway/README.md](apps/gateway/README.md). Sub-phase 1.1 is a skeleton only: no OIDC, no Grok adapter, no Cloud Run deploy.
+See [apps/gateway/README.md](apps/gateway/README.md). **1.3 OIDC:** `GET /health` is public; `GET /v1/me` requires a Google ID token. No Grok adapter or Cloud Run deploy yet.
 
 ## Infrastructure (ellmgw-dev)
 
