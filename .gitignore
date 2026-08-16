@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build / test
+dist/
+coverage/
+*.tsbuildinfo
+
+# Environment (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Logs and OS
+*.log
+.DS_Store
+docs/.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
