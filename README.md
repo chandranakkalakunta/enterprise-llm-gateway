@@ -1,6 +1,7 @@
 # Enterprise LLM Gateway
 
-> **Status:** Architecture **complete** — Implementation not started  
+> **Status:** Architecture **complete** — Implementation Phase 1 (Foundation) started  
+
 > **Repository:** [chandranakkalakunta/enterprise-llm-gateway](https://github.com/chandranakkalakunta/enterprise-llm-gateway)  
 > **Owner:** Chandran Nakkalakunta
 
@@ -27,9 +28,22 @@ Preferred deployment is **inside the corporate firewall / private VPC**. **Phase
 | Ideation / problem framing | Done (migrated from `ideas`) |
 | Requirements baseline | Captured under `docs/` |
 | Architecture | **Complete** (2026-08-14) — [closure report](docs/phase-closure/architecture-phase.md) |
-| Implementation | **Not started** — [roadmap](docs/implementation-roadmap.md) recorded; Phase 1 has not opened |
+| Implementation | **Phase 1 in progress** — [roadmap](docs/implementation-roadmap.md) · [Phase 1 plan](docs/phases/phase-1.md) |
 
 Living architecture: [docs/architecture.md](docs/architecture.md). Deferrals: [docs/backlog.md](docs/backlog.md).
+
+## Application (local development)
+
+The first service is `@ellmgw/gateway` under `apps/gateway/`. Requires **Node.js 22** (`.nvmrc`) and **pnpm**.
+
+```bash
+pnpm install
+pnpm test
+pnpm --filter @ellmgw/gateway dev
+curl -sS http://127.0.0.1:8080/health
+```
+
+See [apps/gateway/README.md](apps/gateway/README.md). Sub-phase 1.1 is a skeleton only: no OIDC, no Grok adapter, no Cloud Run deploy.
 
 ## Architecture Decision Records
 
@@ -73,6 +87,10 @@ The Threat Model lives in [architecture.md §14](docs/architecture.md#14-threat-
 ```text
 .
 ├── README.md
+├── package.json            # pnpm workspace root
+├── pnpm-workspace.yaml
+├── apps/
+│   └── gateway/            # @ellmgw/gateway (Phase 1 skeleton)
 ├── design/                 # Working design artefacts
 └── docs/
     ├── architecture.md
