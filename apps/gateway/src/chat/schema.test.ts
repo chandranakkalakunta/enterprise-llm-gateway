@@ -16,11 +16,11 @@ describe("chatCompletionRequestSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects missing model", () => {
-    const result = chatCompletionRequestSchema.safeParse({
+  it("allows omitting model so the adapter default applies", () => {
+    const parsed = chatCompletionRequestSchema.parse({
       messages: [{ role: "user", content: "hi" }],
     });
-    expect(result.success).toBe(false);
+    expect(parsed.model).toBeUndefined();
   });
 });
 

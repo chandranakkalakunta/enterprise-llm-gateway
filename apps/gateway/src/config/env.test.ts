@@ -33,4 +33,12 @@ describe("parseEnv", () => {
     const env = parseEnv({ OIDC_CLIENT_ID: "client-123" });
     expect(env.OIDC_AUDIENCE).toBe("client-123");
   });
+
+  it("defaults Grok adapter settings", () => {
+    const env = parseEnv({});
+    expect(env.GROK_API_KEY).toBe("");
+    expect(env.GROK_BASE_URL).toBe("https://api.x.ai/v1");
+    expect(env.GROK_DEFAULT_MODEL).toBe("grok-4.5");
+    expect(env.GROK_TIMEOUT_MS).toBe(60_000);
+  });
 });
