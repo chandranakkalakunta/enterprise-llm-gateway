@@ -1,6 +1,6 @@
 # @ellmgw/gateway
 
-Phase 1 Foundation. **1.3 Google OIDC** is in this package. OpenAI-compatible chat (1.4) and the Grok adapter (1.5) are not.
+Phase 1 Foundation. **1.3 Google OIDC** and **1.4 stub** `POST /v1/chat/completions` are in this package. The Grok adapter is **1.5**.
 
 ## Prerequisites
 
@@ -52,13 +52,14 @@ Browser session: httpOnly cookie `ellmgw_id_token` (Google **ID token**). Local 
 
 ## Routes
 
-| Method | Path             | Auth                                  |
-| ------ | ---------------- | ------------------------------------- |
-| GET    | `/health`        | Public                                |
-| GET    | `/v1/me`         | Required (Bearer or session cookie)   |
-| GET    | `/auth/login`    | Starts Google authorization-code flow |
-| GET    | `/auth/callback` | Exchanges `code`; sets session cookie |
-| GET    | `/auth/logout`   | Clears cookies                        |
+| Method | Path                   | Auth                                                        |
+| ------ | ---------------------- | ----------------------------------------------------------- |
+| GET    | `/health`              | Public                                                      |
+| GET    | `/v1/me`               | Required (Bearer or session cookie)                         |
+| GET    | `/auth/login`          | Starts Google authorization-code flow                       |
+| GET    | `/auth/callback`       | Exchanges `code`; sets session cookie                       |
+| GET    | `/auth/logout`         | Clears cookies                                              |
+| POST   | `/v1/chat/completions` | Required; **stub** completion (non-streaming). Grok is 1.5. |
 
 ## Scripts
 

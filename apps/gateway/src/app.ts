@@ -14,6 +14,9 @@ import { parseAdminEmails } from "./auth/roles.js";
 import type { VerifyIdToken } from "./auth/types.js";
 import { createGoogleIdTokenVerifier } from "./auth/verify.js";
 import { type Env, oidcConfigured, parseEnv } from "./config/env.js";
+import { resolveRequestId } from "./chat/request-id.js";
+import { chatCompletionRequestSchema } from "./chat/schema.js";
+import { stubChatCompletion } from "./chat/stub.js";
 import { healthPayload } from "./http/health.js";
 import { mePayload } from "./http/me.js";
 
@@ -113,8 +116,50 @@ export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
     return c.json({ status: "signed_out" }, 200);
   });
 
-  app.get("/v1/me", requireAuth({ adminEmails, verifyIdToken }), (c) => {
+  const auth = requireAuth({ adminEmails, verifyIdToken });
+
+  app.get("/v1/me", auth, (c) => {
     return c.json(mePayload(c.get("identity")), 200);
+  });
+
+  app.post("/v1/chat/completions", auth, async (c) => {
+    const requestId = resolveRequestId(c.req.header("x-request-id"));
+    c.header("x-request-id", requestId);
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(
+        { error: "invalid_request", code: "invalid_json", message: "request body must be JSON" },
+        400,
+      );
+    }
+
+    const parsed = chatCompletionRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: "invalid_request",
+          code: "invalid_body",
+          message: "model and a non-empty messages[] with role and content are required",
+        },
+        400,
+      );
+    }
+
+    if (parsed.data.stream === true) {
+      return c.json(
+        {
+          error: "invalid_request",
+          code: "stream_not_implemented",
+          message: "streaming is not implemented in phase 1.4; send stream=false or omit stream",
+        },
+        400,
+      );
+    }
+
+    return c.json(stubChatCompletion(parsed.data, { requestId }), 200);
   });
 
   return app;
