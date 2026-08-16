@@ -9,6 +9,10 @@ export const envSchema = z.object({
   OIDC_AUDIENCE: z.string().default(""),
   OIDC_REDIRECT_URI: z.string().default("http://localhost:8080/auth/callback"),
   ADMIN_EMAILS: z.string().default("admin@chandraailabs.com"),
+  GROK_API_KEY: z.string().default(""),
+  GROK_BASE_URL: z.string().url().default("https://api.x.ai/v1"),
+  GROK_DEFAULT_MODEL: z.string().min(1).default("grok-4.5"),
+  GROK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300_000).default(60_000),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -27,4 +31,8 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
 
 export function oidcConfigured(env: Env): boolean {
   return env.OIDC_CLIENT_ID.length > 0 && env.OIDC_CLIENT_SECRET.length > 0;
+}
+
+export function grokConfigured(env: Env): boolean {
+  return env.GROK_API_KEY.length > 0;
 }

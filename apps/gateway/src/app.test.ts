@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { parseEnv } from "./config/env.js";
 import type { IdTokenClaims } from "./auth/types.js";
+import { ProviderError } from "./providers/types.js";
 
 const testEnv = parseEnv({
   NODE_ENV: "test",
@@ -144,8 +145,41 @@ describe("POST /v1/chat/completions", () => {
     });
   });
 
-  it("returns a 200 OpenAI-shaped stub with request id", async () => {
+  it("returns 503 when GROK_API_KEY is missing", async () => {
     const app = createApp(authed);
+    const res = await app.request("/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: "Bearer x", "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "hello" }] }),
+    });
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({ code: "provider_not_configured" });
+  });
+
+  it("returns a 200 OpenAI-shaped completion from the adapter", async () => {
+    const app = createApp({
+      ...authed,
+      env: parseEnv({
+        NODE_ENV: "test",
+        OIDC_CLIENT_ID: "test-client-id",
+        OIDC_CLIENT_SECRET: "test-client-secret",
+        GROK_API_KEY: "test-key",
+      }),
+      completeChat: async (_req, opts) => ({
+        id: `chatcmpl-${opts.requestId}`,
+        object: "chat.completion",
+        created: 1,
+        model: "grok-4.5",
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: "hi from mock grok" },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+      }),
+    });
     const res = await app.request("/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -154,7 +188,7 @@ describe("POST /v1/chat/completions", () => {
         "x-request-id": "fixed-req-id",
       },
       body: JSON.stringify({
-        model: "grok-3",
+        model: "grok-4.5",
         messages: [{ role: "user", content: "hello" }],
       }),
     });
@@ -168,10 +202,31 @@ describe("POST /v1/chat/completions", () => {
     };
     expect(json.id).toBe("chatcmpl-fixed-req-id");
     expect(json.object).toBe("chat.completion");
-    expect(json.model).toBe("grok-3");
-    expect(json.choices[0]?.message.role).toBe("assistant");
-    expect(json.choices[0]?.message.content).toContain("hello");
-    expect(json.choices[0]?.message.content).toContain("[stub]");
+    expect(json.model).toBe("grok-4.5");
+    expect(json.choices[0]?.message.content).toBe("hi from mock grok");
+    expect(json.choices[0]?.message.content).not.toContain("[stub]");
+  });
+
+  it("maps adapter timeout to 504", async () => {
+    const app = createApp({
+      ...authed,
+      env: parseEnv({
+        NODE_ENV: "test",
+        OIDC_CLIENT_ID: "test-client-id",
+        OIDC_CLIENT_SECRET: "test-client-secret",
+        GROK_API_KEY: "test-key",
+      }),
+      completeChat: async () => {
+        throw new ProviderError(504, "provider_timeout", "Grok request timed out");
+      },
+    });
+    const res = await app.request("/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: "Bearer x", "content-type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "hello" }] }),
+    });
+    expect(res.status).toBe(504);
+    await expect(res.json()).resolves.toMatchObject({ code: "provider_timeout" });
   });
 });
 

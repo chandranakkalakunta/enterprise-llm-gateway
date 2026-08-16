@@ -6,7 +6,7 @@ export const chatMessageSchema = z.object({
 });
 
 export const chatCompletionRequestSchema = z.object({
-  model: z.string().min(1),
+  model: z.string().min(1).optional(),
   messages: z.array(chatMessageSchema).min(1),
   stream: z.boolean().optional(),
 });

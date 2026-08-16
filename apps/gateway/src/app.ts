@@ -13,16 +13,18 @@ import {
 import { parseAdminEmails } from "./auth/roles.js";
 import type { VerifyIdToken } from "./auth/types.js";
 import { createGoogleIdTokenVerifier } from "./auth/verify.js";
-import { type Env, oidcConfigured, parseEnv } from "./config/env.js";
+import { type Env, grokConfigured, oidcConfigured, parseEnv } from "./config/env.js";
 import { resolveRequestId } from "./chat/request-id.js";
 import { chatCompletionRequestSchema } from "./chat/schema.js";
-import { stubChatCompletion } from "./chat/stub.js";
+import { createGrokCompleter } from "./providers/grok.js";
+import { type CompleteChat, ProviderError } from "./providers/types.js";
 import { healthPayload } from "./http/health.js";
 import { mePayload } from "./http/me.js";
 
 export type CreateAppOptions = {
   env?: Env;
   verifyIdToken?: VerifyIdToken;
+  completeChat?: CompleteChat;
 };
 
 export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
@@ -36,6 +38,14 @@ export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
       audience: audience.length > 0 ? audience : "unconfigured",
     });
   const cookieSecure = env.NODE_ENV === "production";
+  const completeChat =
+    options.completeChat ??
+    createGrokCompleter({
+      apiKey: env.GROK_API_KEY,
+      baseUrl: env.GROK_BASE_URL,
+      defaultModel: env.GROK_DEFAULT_MODEL,
+      timeoutMs: env.GROK_TIMEOUT_MS,
+    });
 
   const app = new Hono<AuthEnv>();
 
@@ -153,13 +163,38 @@ export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
         {
           error: "invalid_request",
           code: "stream_not_implemented",
-          message: "streaming is not implemented in phase 1.4; send stream=false or omit stream",
+          message: "streaming is not implemented; send stream=false or omit stream",
         },
         400,
       );
     }
 
-    return c.json(stubChatCompletion(parsed.data, { requestId }), 200);
+    if (!grokConfigured(env)) {
+      return c.json(
+        {
+          error: "provider_not_configured",
+          code: "provider_not_configured",
+          message: "GROK_API_KEY is not set",
+        },
+        503,
+      );
+    }
+
+    try {
+      const completion = await completeChat(parsed.data, { requestId });
+      return c.json(completion, 200);
+    } catch (err) {
+      if (err instanceof ProviderError) {
+        return c.json(
+          { error: "provider_error", code: err.code, message: err.message },
+          err.status,
+        );
+      }
+      return c.json(
+        { error: "provider_error", code: "provider_error", message: "upstream request failed" },
+        502,
+      );
+    }
   });
 
   return app;
