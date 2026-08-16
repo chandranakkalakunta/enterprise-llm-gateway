@@ -1,68 +1,78 @@
-# Terraform — ellmgw-dev foundation
+# Terraform — ellmgw-dev foundation + Cloud Run
 
-Phase **1.2**. Manages APIs, the gateway runtime service account, Secret Manager **placeholders**, and an Artifact Registry repo.
-
-**Does not** create Cloud Run services (1.7), OIDC clients (1.3), or secret *payloads*.
+Phase **1.2** (APIs, SA, secrets, Artifact Registry) and **1.7** (Cloud Run).
 
 | Item | Value |
 |------|--------|
 | Project | `ellmgw-dev` |
 | Region | `asia-south1` |
-| State | `gs://ellmgw-dev-tfstate/gateway/dev` (bucket already exists) |
+| State | `gs://ellmgw-dev-tfstate/gateway/dev` |
+| Image | `asia-south1-docker.pkg.dev/ellmgw-dev/gateway/gateway:<tag>` |
+| Runtime SA | `gateway-runtime@ellmgw-dev.iam.gserviceaccount.com` |
 
 ## Prerequisites
 
-- `gcloud` authenticated as a principal that can enable APIs and create IAM/secrets in `ellmgw-dev`
+- `gcloud` authenticated; `gcloud auth application-default login`
 - `terraform` >= 1.5
-- Application Default Credentials: `gcloud auth application-default login`
+- Docker (linux/amd64) for image push
+- Secret **versions** already exist for `ellmgw-gateway-grok-api-key` and `ellmgw-gateway-oidc-client-secret`
 
 ```bash
 gcloud config set project ellmgw-dev
 ```
+
+## Build and push the image
+
+From the **repository root**:
+
+```bash
+chmod +x scripts/push-gateway-image.sh
+./scripts/push-gateway-image.sh
+```
+
+This tags `gateway:<git-sha>` and `gateway:latest`.
 
 ## Plan / apply
 
 ```bash
 cd infra/terraform
 terraform init
-terraform plan -out=tfplan
+terraform plan \
+  -var='gateway_image=asia-south1-docker.pkg.dev/ellmgw-dev/gateway/gateway:latest' \
+  -out=tfplan
 terraform apply tfplan
+terraform output gateway_service_uri
 ```
 
-Optional: `cp terraform.tfvars.example terraform.tfvars` (defaults already match `ellmgw-dev` / `asia-south1`).
+After the first URL is known, set the OAuth redirect and re-apply (non-secret):
 
-Do **not** commit `tfplan`, `.terraform/`, or `*.tfstate`.
+```bash
+URL="$(terraform output -raw gateway_service_uri)"
+terraform apply -auto-approve \
+  -var="gateway_image=asia-south1-docker.pkg.dev/ellmgw-dev/gateway/gateway:latest" \
+  -var="oidc_redirect_uri=${URL}/auth/callback" \
+  -var="oidc_client_id=YOUR_GOOGLE_OAUTH_CLIENT_ID"
+```
+
+Add `${URL}/auth/callback` to the Google Cloud OAuth client's authorized redirect URIs.
+
+`ellmgw-dev` is under org policy `constraints/iam.allowedPolicyMemberDomains` (customer `C02zg9f48` only). That blocks `roles/run.invoker` for `allUsers`. The service uses `invoker_iam_disabled = true` instead so HTTPS `/health` is reachable; app-level OIDC still protects `/v1/*`.
+
+Do **not** put `OIDC_CLIENT_SECRET` or `GROK_API_KEY` in `.tfvars`. They are bound from Secret Manager (`latest`).
+
+Optional local file `terraform.tfvars` (gitignored) for non-secret values. Start from `terraform.tfvars.example`.
+
+## Smoke
+
+```bash
+curl -sS "$(terraform output -raw gateway_service_uri)/health"
+```
+
+`/v1/me` and `/v1/chat/completions` need a valid Google ID token after the redirect URI and `oidc_client_id` are set.
 
 ## Resources
 
-- **APIs** via `google_project_service` (`disable_on_destroy = false`)
-- **SA** `gateway-runtime@ellmgw-dev.iam.gserviceaccount.com`
-  - `roles/logging.logWriter`, `roles/monitoring.metricWriter` (project)
-  - `roles/secretmanager.secretAccessor` on the two gateway secrets only
-  - `roles/artifactregistry.reader` on the `gateway` repo
-- **Secrets** (empty — no versions in Terraform)
-  - `ellmgw-gateway-grok-api-key`
-  - `ellmgw-gateway-oidc-client-secret`
-- **Artifact Registry** Docker repo `gateway` in `asia-south1`
-
-Cloud Run in **1.7** should set `--service-account=$(terraform output -raw gateway_service_account_email)`. No JSON keys; Workload Identity / attached SA only.
-
-## Set secret values out of band
-
-Coordinator / operator, **not** Terraform:
-
-```bash
-# Grok API key (xAI)
-printf '%s' 'YOUR_GROK_KEY' | gcloud secrets versions add ellmgw-gateway-grok-api-key \
-  --project=ellmgw-dev --data-file=-
-
-# OIDC client secret (Google Cloud Console OAuth client — 1.3)
-printf '%s' 'YOUR_OIDC_CLIENT_SECRET' | gcloud secrets versions add ellmgw-gateway-oidc-client-secret \
-  --project=ellmgw-dev --data-file=-
-```
-
-Never paste these values into `.tf`, `.tfvars`, or git.
-
-## Destroy
-
-Not expected for `ellmgw-dev`. If you must: `terraform destroy` does **not** disable APIs (`disable_on_destroy = false`).
+- APIs, runtime SA, secret placeholders, Artifact Registry (1.2)
+- Cloud Run service `gateway` (1.7), `invoker_iam_disabled = true` (org policy blocks `allUsers`; app-level OIDC still required)
+- Container port `8080`. Do not set env `PORT` in Terraform — Cloud Run reserves it and injects it.
+- Secret env: `GROK_API_KEY`, `OIDC_CLIENT_SECRET`

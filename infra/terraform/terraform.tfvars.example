@@ -1,3 +1,11 @@
-project_id = "ellmgw-dev"
-region     = "asia-south1"
-# No secrets here. Add Secret Manager versions out of band (see README.md).
+project_id     = "ellmgw-dev"
+region         = "asia-south1"
+gateway_image  = "asia-south1-docker.pkg.dev/ellmgw-dev/gateway/gateway:latest"
+
+# Non-secret OIDC public config. Do not put OIDC_CLIENT_SECRET or GROK_API_KEY here.
+# After first apply: oidc_redirect_uri = "<gateway_service_uri>/auth/callback"
+# Also add that URL to the Google OAuth client's authorized redirect URIs.
+oidc_client_id    = ""
+oidc_audience     = ""
+oidc_redirect_uri = ""
+admin_emails      = "admin@chandraailabs.com"

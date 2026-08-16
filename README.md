@@ -43,20 +43,23 @@ pnpm --filter @ellmgw/gateway dev
 curl -sS http://127.0.0.1:8080/health
 ```
 
-See [apps/gateway/README.md](apps/gateway/README.md). **1.3 OIDC:** `GET /health` is public; `GET /v1/me` requires a Google ID token. No Grok adapter or Cloud Run deploy yet.
+See [apps/gateway/README.md](apps/gateway/README.md). **1.3 OIDC:** `GET /health` is public; `GET /v1/me` requires a Google ID token. **1.5** Grok adapter; **1.7** Cloud Run — see [infra/terraform/README.md](infra/terraform/README.md).
 
 ## Infrastructure (ellmgw-dev)
 
 GCP foundation is Terraform under [infra/terraform/](infra/terraform/). Project `ellmgw-dev`, region `asia-south1`, state `gs://ellmgw-dev-tfstate/gateway/dev`.
 
 ```bash
+./scripts/push-gateway-image.sh
 cd infra/terraform
 terraform init
-terraform plan -out=tfplan
+terraform plan -var='gateway_image=asia-south1-docker.pkg.dev/ellmgw-dev/gateway/gateway:latest' -out=tfplan
 terraform apply tfplan
 ```
 
 Secret **values** are not in Terraform. Add versions out of band — see [infra/terraform/README.md](infra/terraform/README.md).
+
+**1.7 applied** (`ellmgw-dev` / `asia-south1`): `https://gateway-gxwuhvcpuq-el.a.run.app` — image `gateway:fc8f9ed`. `GET /health` is public. Set Google OAuth authorized redirect to `https://gateway-gxwuhvcpuq-el.a.run.app/auth/callback` and pass `oidc_client_id` via local `terraform.tfvars` (gitignored) before `/v1/me` or chat will work.
 
 ## Architecture Decision Records
 
