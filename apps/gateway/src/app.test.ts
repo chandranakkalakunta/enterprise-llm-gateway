@@ -20,6 +20,27 @@ describe("GET /health", () => {
     expect(res.headers.get("content-type")).toMatch(/application\/json/);
     await expect(res.json()).resolves.toEqual({ status: "ok", service: "gateway" });
   });
+
+  it("sets x-request-id when missing and echoes an incoming one", async () => {
+    const app = createApp();
+    const generated = await app.request("/health");
+    expect(generated.headers.get("x-request-id")).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    const echoed = await app.request("/health", { headers: { "x-request-id": "client-rid" } });
+    expect(echoed.headers.get("x-request-id")).toBe("client-rid");
+  });
+});
+
+describe("GET /metrics", () => {
+  it("is public and counts requests", async () => {
+    const app = createApp();
+    await app.request("/health");
+    const res = await app.request("/metrics");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { requests_total: number };
+    expect(body.requests_total).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe("GET /v1/me", () => {
