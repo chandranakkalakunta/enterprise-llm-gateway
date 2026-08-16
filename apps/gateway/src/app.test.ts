@@ -97,6 +97,84 @@ describe("GET /auth/login", () => {
   });
 });
 
+describe("POST /v1/chat/completions", () => {
+  const authed = {
+    env: testEnv,
+    verifyIdToken: async () => ({ sub: "sub-1", email: "dev@example.com" }),
+  };
+
+  it("returns 401 without credentials", async () => {
+    const app = createApp({ env: testEnv });
+    const res = await app.request("/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "stub", messages: [{ role: "user", content: "hi" }] }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when the body is invalid", async () => {
+    const app = createApp(authed);
+    const res = await app.request("/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: "Bearer x", "content-type": "application/json" },
+      body: JSON.stringify({ model: "stub", messages: [] }),
+    });
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "invalid_request",
+      code: "invalid_body",
+    });
+  });
+
+  it("returns 400 when stream is true", async () => {
+    const app = createApp(authed);
+    const res = await app.request("/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: "Bearer x", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "stub",
+        stream: true,
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "stream_not_implemented",
+    });
+  });
+
+  it("returns a 200 OpenAI-shaped stub with request id", async () => {
+    const app = createApp(authed);
+    const res = await app.request("/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer x",
+        "content-type": "application/json",
+        "x-request-id": "fixed-req-id",
+      },
+      body: JSON.stringify({
+        model: "grok-3",
+        messages: [{ role: "user", content: "hello" }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-request-id")).toBe("fixed-req-id");
+    const json = (await res.json()) as {
+      id: string;
+      object: string;
+      model: string;
+      choices: { message: { role: string; content: string } }[];
+    };
+    expect(json.id).toBe("chatcmpl-fixed-req-id");
+    expect(json.object).toBe("chat.completion");
+    expect(json.model).toBe("grok-3");
+    expect(json.choices[0]?.message.role).toBe("assistant");
+    expect(json.choices[0]?.message.content).toContain("hello");
+    expect(json.choices[0]?.message.content).toContain("[stub]");
+  });
+});
+
 describe("GET /auth/callback", () => {
   it("rejects a missing or mismatched state", async () => {
     const app = createApp({ env: testEnv });
