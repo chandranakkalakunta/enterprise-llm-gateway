@@ -6,7 +6,8 @@ import type { IdentityContext, VerifyIdToken } from "./types.js";
 
 export type AuthEnv = {
   Variables: {
-    identity: IdentityContext;
+    requestId: string;
+    identity?: IdentityContext;
   };
 };
 

@@ -1,3 +1,4 @@
+import type { Logger } from "../obs/logger.js";
 import { type ChatCompletionResponse, type CompleteChat, ProviderError } from "./types.js";
 
 export type GrokAdapterConfig = {
@@ -6,6 +7,7 @@ export type GrokAdapterConfig = {
   defaultModel: string;
   timeoutMs: number;
   fetchFn?: typeof fetch;
+  log?: Logger;
 };
 
 type UpstreamCompletion = {
@@ -35,6 +37,19 @@ export function createGrokCompleter(config: GrokAdapterConfig): CompleteChat {
     const timer = setTimeout(() => {
       controller.abort();
     }, config.timeoutMs);
+    const started = Date.now();
+
+    const emit = (ok: boolean, errorCode?: string): void => {
+      config.log?.info({
+        msg: "provider_complete",
+        provider: "grok",
+        model,
+        latency_ms: Date.now() - started,
+        ok,
+        request_id: opts.requestId,
+        ...(errorCode !== undefined ? { error_code: errorCode } : {}),
+      });
+    };
 
     let res: Response;
     try {
@@ -53,29 +68,32 @@ export function createGrokCompleter(config: GrokAdapterConfig): CompleteChat {
       });
     } catch (err) {
       if (isAbortError(err)) {
+        emit(false, "provider_timeout");
         throw new ProviderError(504, "provider_timeout", "Grok request timed out");
       }
+      emit(false, "provider_unreachable");
       throw new ProviderError(502, "provider_unreachable", "Grok request failed");
     } finally {
       clearTimeout(timer);
     }
 
     if (!res.ok) {
-      throw new ProviderError(
-        502,
-        mapUpstreamCode(res.status),
-        `Grok upstream returned ${res.status}`,
-      );
+      const code = mapUpstreamCode(res.status);
+      emit(false, code);
+      throw new ProviderError(502, code, `Grok upstream returned ${res.status}`);
     }
 
     let payload: unknown;
     try {
       payload = await res.json();
     } catch {
+      emit(false, "provider_invalid_response");
       throw new ProviderError(502, "provider_invalid_response", "Grok response was not JSON");
     }
 
-    return normalizeCompletion(payload, { requestId: opts.requestId, model });
+    const completion = normalizeCompletion(payload, { requestId: opts.requestId, model });
+    emit(true);
+    return completion;
   };
 }
 

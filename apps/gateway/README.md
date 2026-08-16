@@ -1,6 +1,6 @@
 # @ellmgw/gateway
 
-Phase 1 Foundation. Authenticated `POST /v1/chat/completions` calls the **Grok** adapter (non-streaming). Streaming, DLP, and other providers are later.
+Phase 1 Foundation. Authenticated `POST /v1/chat/completions` calls the **Grok** adapter (non-streaming). Structured JSON logs go to stdout (no prompt/response bodies). Streaming, DLP, and other providers are later.
 
 ## Prerequisites
 
@@ -59,6 +59,7 @@ Browser session: httpOnly cookie `ellmgw_id_token` (Google **ID token**). Local 
 | Method | Path                   | Auth                                                            |
 | ------ | ---------------------- | --------------------------------------------------------------- |
 | GET    | `/health`              | Public                                                          |
+| GET    | `/metrics`             | Public JSON counters (no prompt data)                           |
 | GET    | `/v1/me`               | Required (Bearer or session cookie)                             |
 | GET    | `/auth/login`          | Starts Google authorization-code flow                           |
 | GET    | `/auth/callback`       | Exchanges `code`; sets session cookie                           |

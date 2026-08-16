@@ -14,10 +14,12 @@ import { parseAdminEmails } from "./auth/roles.js";
 import type { VerifyIdToken } from "./auth/types.js";
 import { createGoogleIdTokenVerifier } from "./auth/verify.js";
 import { type Env, grokConfigured, oidcConfigured, parseEnv } from "./config/env.js";
-import { resolveRequestId } from "./chat/request-id.js";
 import { chatCompletionRequestSchema } from "./chat/schema.js";
 import { createGrokCompleter } from "./providers/grok.js";
 import { type CompleteChat, ProviderError } from "./providers/types.js";
+import { type Counters, createCounters } from "./obs/counters.js";
+import { createLogger, type Logger } from "./obs/logger.js";
+import { requestObservability } from "./obs/middleware.js";
 import { healthPayload } from "./http/health.js";
 import { mePayload } from "./http/me.js";
 
@@ -25,6 +27,8 @@ export type CreateAppOptions = {
   env?: Env;
   verifyIdToken?: VerifyIdToken;
   completeChat?: CompleteChat;
+  log?: Logger;
+  counters?: Counters;
 };
 
 export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
@@ -38,6 +42,8 @@ export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
       audience: audience.length > 0 ? audience : "unconfigured",
     });
   const cookieSecure = env.NODE_ENV === "production";
+  const log = options.log ?? createLogger();
+  const counters = options.counters ?? createCounters();
   const completeChat =
     options.completeChat ??
     createGrokCompleter({
@@ -45,11 +51,15 @@ export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
       baseUrl: env.GROK_BASE_URL,
       defaultModel: env.GROK_DEFAULT_MODEL,
       timeoutMs: env.GROK_TIMEOUT_MS,
+      log,
     });
 
   const app = new Hono<AuthEnv>();
+  app.use("*", requestObservability({ log, counters }));
 
   app.get("/health", (c) => c.json(healthPayload(), 200));
+
+  app.get("/metrics", (c) => c.json(counters.snapshot(), 200));
 
   app.get("/auth/login", (c) => {
     if (!oidcConfigured(env)) {
@@ -129,12 +139,15 @@ export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
   const auth = requireAuth({ adminEmails, verifyIdToken });
 
   app.get("/v1/me", auth, (c) => {
-    return c.json(mePayload(c.get("identity")), 200);
+    const identity = c.get("identity");
+    if (identity === undefined) {
+      return c.json({ error: "unauthorized", message: "missing identity" }, 401);
+    }
+    return c.json(mePayload(identity), 200);
   });
 
   app.post("/v1/chat/completions", auth, async (c) => {
-    const requestId = resolveRequestId(c.req.header("x-request-id"));
-    c.header("x-request-id", requestId);
+    const requestId = c.get("requestId");
 
     let body: unknown;
     try {
@@ -184,6 +197,7 @@ export function createApp(options: CreateAppOptions = {}): Hono<AuthEnv> {
       const completion = await completeChat(parsed.data, { requestId });
       return c.json(completion, 200);
     } catch (err) {
+      counters.recordProviderError();
       if (err instanceof ProviderError) {
         return c.json(
           { error: "provider_error", code: err.code, message: err.message },
