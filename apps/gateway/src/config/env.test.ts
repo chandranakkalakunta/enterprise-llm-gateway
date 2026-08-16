@@ -21,4 +21,16 @@ describe("parseEnv", () => {
   it("rejects a non-numeric PORT", () => {
     expect(() => parseEnv({ PORT: "not-a-port" })).toThrow();
   });
+
+  it("defaults OIDC issuer and admin allow-list", () => {
+    const env = parseEnv({});
+    expect(env.OIDC_ISSUER).toBe("https://accounts.google.com");
+    expect(env.ADMIN_EMAILS).toBe("admin@chandraailabs.com");
+    expect(env.OIDC_CLIENT_ID).toBe("");
+  });
+
+  it("copies OIDC_CLIENT_ID into OIDC_AUDIENCE when audience is empty", () => {
+    const env = parseEnv({ OIDC_CLIENT_ID: "client-123" });
+    expect(env.OIDC_AUDIENCE).toBe("client-123");
+  });
 });
