@@ -45,6 +45,19 @@ curl -sS http://127.0.0.1:8080/health
 
 See [apps/gateway/README.md](apps/gateway/README.md). Sub-phase 1.1 is a skeleton only: no OIDC, no Grok adapter, no Cloud Run deploy.
 
+## Infrastructure (ellmgw-dev)
+
+GCP foundation is Terraform under [infra/terraform/](infra/terraform/). Project `ellmgw-dev`, region `asia-south1`, state `gs://ellmgw-dev-tfstate/gateway/dev`.
+
+```bash
+cd infra/terraform
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+Secret **values** are not in Terraform. Add versions out of band — see [infra/terraform/README.md](infra/terraform/README.md).
+
 ## Architecture Decision Records
 
 All of the following are **Accepted**.
@@ -91,6 +104,7 @@ The Threat Model lives in [architecture.md §14](docs/architecture.md#14-threat-
 ├── pnpm-workspace.yaml
 ├── apps/
 │   └── gateway/            # @ellmgw/gateway (Phase 1 skeleton)
+├── infra/terraform/        # GCP foundation (ellmgw-dev)
 ├── design/                 # Working design artefacts
 └── docs/
     ├── architecture.md

@@ -1,0 +1,3 @@
+project_id = "ellmgw-dev"
+region     = "asia-south1"
+# No secrets here. Add Secret Manager versions out of band (see README.md).
